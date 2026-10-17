@@ -5,6 +5,7 @@ const DOC_CSS=`
 .dp{position:absolute;inset:0;padding:16px 22px;font-size:11px}
 .dh{width:100%;border-collapse:collapse;border:1px solid #111;table-layout:fixed;margin-bottom:0}
 .dh td{border:1px solid #bbb;padding:3px 8px;font-size:12px;height:23px}
+.dh td.lg{text-align:center;padding:2px;width:92px}.dh td.lg img{max-width:84px;max-height:46px;object-fit:contain}
 .dh .ttl{text-align:center;color:#d00;font-weight:700;font-size:17px}
 .dh .c{color:#1a3fc4}
 .band{border:1px solid #111;border-top:0;background:#dcdcdc;text-align:center;font-weight:700;font-size:13px;padding:4px}
@@ -19,19 +20,22 @@ const DOC_CSS=`
 .dt td.warn{color:#b00;font-size:10px}
 .sum{display:flex;justify-content:space-between;align-items:center;border:2px solid #1a3fc4;margin-top:8px;padding:7px 14px;font-size:16px;font-weight:700}
 .sig{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:12px;font-size:11px;text-align:center}.sig div{border-top:1px solid #111;padding-top:4px;margin-top:34px}
+.plbox{margin-top:8px;height:590px;border:1px solid #888;background:#f4f4f4}.plbox svg{width:100%;height:100%;display:block}
+.phg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}.phc{border:1px solid #888;padding:3px}.phi{height:236px;background:#f2f2f2}.phi svg{width:100%;height:100%;display:block}.phn{font-size:11px;height:30px;overflow:hidden;padding-top:2px}
 .dpf{position:absolute;left:22px;right:22px;bottom:10px;display:flex;justify-content:space-between;font-size:10px;color:#666}
 `;
+const logoHTML=()=>{const L=S.project.logoId&&imgSrc(S.project.logoId);return L?`<img src="${L}" alt="">`:`<span style="font-size:10px;color:#555">${esc(S.project.company||'')}</span>`};
 const KINDTXT={sub:'ผู้รับเหมา',dc:'แรง DC บริษัท'};
 function dHead(c,k,title){
   const P=S.project;const s=k.sub;
   const rng=s?[s.from&&fmtShort(s.from),s.to&&fmtShort(s.to)].filter(Boolean).join(' – '):'';
-  return`<table class="dh"><colgroup><col style="width:30%"><col><col style="width:14%"><col style="width:20%"></colgroup>
-   <tr><td class="c">โครงการ : ${esc(P.name)}</td><td class="ttl" rowspan="2">${esc(c.name)}</td><td class="c">หมวดงาน :</td><td class="ttl" style="color:#111;font-size:14px;text-align:left">${esc(P.category||'')}</td></tr>
+  return`<table class="dh"><colgroup><col style="width:92px"><col style="width:28%"><col><col style="width:13%"><col style="width:19%"></colgroup>
+   <tr><td rowspan="2" class="lg">${logoHTML()}</td><td class="c">โครงการ : ${esc(P.name)}</td><td class="ttl" rowspan="2">${esc(c.name)}</td><td class="c">หมวดงาน :</td><td class="ttl" style="color:#111;font-size:14px;text-align:left">${esc(P.category||'')}</td></tr>
    <tr><td class="c">ผู้ว่าจ้าง : ${esc(P.client||'')}</td><td class="c">Date : ${esc(fmtShort(s&&s.date||todayISO()))}</td><td>${esc(fmtDate(s&&s.date||todayISO()))}</td></tr></table>
    <div class="band">${esc(title)}</div>
    <div class="band2"><span>${KINDTXT[c.kind]||'ชุด'} : <b>${esc(c.name)}</b></span><span>อาคาร : <b>${esc(c.building)}</b></span><span>งวดที่ : <b>${k.no}</b>${rng?' ('+esc(rng)+')':''}</span>${c.detail?`<span>รายละเอียดงาน : ${esc(c.detail)}</span>`:''}</div>`;
 }
-const dFoot=(c,k,p,n)=>`<div class="dpf"><span>${esc(S.project.name)} · ${esc(c.building)} · ${esc(c.name)} · งวดที่ ${k.no}</span><span>${p} / ${n}</span></div>`;
+const dFoot=(c,k)=>`<div class="dpf"><span>${esc(S.project.name)} · ${esc(c.building)} · ${esc(c.name)} · งวดที่ ${k.no}</span><span>%%P%% / %%N%%</span></div>`;
 const sigHTML=()=>`<div class="sig"><div>ผู้ส่งงาน / หัวหน้าชุด</div><div>ผู้ตรวจรับงาน (ผู้ควบคุมงาน)</div><div>ผู้อนุมัติ</div></div>`;
 const rowNote=r=>[r.note,r.boq?'':'ไม่มี BOQ คลุม',r.over?'เกินปริมาณสัญญา':''].filter(Boolean).join(' · ');
 
@@ -89,7 +93,23 @@ function roomPages(c,k){
   parts.push({head:dHead(c,k,'สรุปงบเบิกผลงาน (คุมงบตามปริมาณ ตร.ม. ต่อ ITEM)'),html:sumPage});
   const N=parts.length;return parts.map((p,i)=>`<div class="dp">${p.head}${p.html}${dFoot(c,k,i+1,N)}</div>`);
 }
-function crewDocPages(c,no){const k=calcCrew(c,no);return c.mode==='room'?roomPages(c,k):linePages(c,k)}
+function attachPages(c,k){
+  const s=k.sub;if(!s)return[];const out=[];const hd=t=>dHead(c,k,t);
+  for(const p of (s.plans||[]))out.push(`<div class="dp">${hd('แบบประกอบการส่งงาน · '+(p.name||''))}<div class="plbox">${annotatedSvg(imgSrc(p.imgId),p.w,p.h,p.shapes||[],[],{scale:p.sym})}</div>${dFoot(c,k)}</div>`);
+  const ph=s.photos||[];const PER=6;
+  for(let i=0;i<ph.length;i+=PER){const ch=ph.slice(i,i+PER);
+    out.push(`<div class="dp">${hd('รูปถ่ายประกอบการส่งงาน'+(ph.length>PER?` (${Math.floor(i/PER)+1}/${Math.ceil(ph.length/PER)})`:''))}<div class="phg">${ch.map((p,j)=>`<div class="phc"><div class="phi">${annotatedSvg(imgSrc(p.imgId),p.w,p.h,p.shapes||[],[])}</div><div class="phn"><b>${i+j+1}.</b> ${esc(p.caption||'')}</div></div>`).join('')}</div>${dFoot(c,k)}</div>`)}
+  return out;
+}
+function crewDocPages(c,no){
+  const k=calcCrew(c,no);let pg=c.mode==='room'?roomPages(c,k):linePages(c,k);pg=pg.concat(attachPages(c,k));
+  const N=pg.length;return pg.map((h,i)=>h.replace(/%%P%%/g,i+1).replace(/%%N%%/g,N));
+}
+async function crewDocReady(c,no){
+  const k=calcCrew(c,no);const s=k.sub;
+  await ensureData([S.project.logoId],true);if(s)await ensureData([...(s.plans||[]),...(s.photos||[])].map(x=>x.imgId));
+  return crewDocPages(c,no);
+}
 
 /* --- สรุปทั้งอาคาร (หน้าปะหน้าสำหรับส่งรวม) --- */
 function buildingPages(b,kind){
@@ -98,7 +118,7 @@ function buildingPages(b,kind){
   const chunks=[];for(let i=0;i<ks.length;i+=CH)chunks.push(ks.slice(i,i+CH));if(!chunks.length)chunks.push([]);
   const tot=ks.filter(x=>!x.c.skip).reduce((a,x)=>({amt:a.amt+x.k.T.amt,prev:a.prev+x.k.T.prevAmt,cur:a.cur+x.k.T.curAmt,cum:a.cum+x.k.T.cumAmt}),{amt:0,prev:0,cur:0,cum:0});
   chunks.forEach((ch,i)=>{const last=i===chunks.length-1;let n0=i*CH;
-    pages.push(`<div class="dp"><table class="dh"><colgroup><col style="width:30%"><col><col style="width:34%"></colgroup><tr><td class="c">โครงการ : ${esc(P.name)}</td><td class="ttl">สรุปส่งงาน/เบิกผลงาน ${b?'อาคาร '+esc(b):'ทุกอาคาร'}${kind?' · '+esc(KIND[kind]):''}</td><td class="c">วันที่ : ${esc(fmtDate(todayISO()))}</td></tr><tr><td class="c">ผู้ว่าจ้าง : ${esc(P.client||'')}</td><td class="c" style="text-align:center">หมวดงาน ${esc(P.category||'')}</td><td></td></tr></table>
+    pages.push(`<div class="dp"><table class="dh"><colgroup><col style="width:30%"><col><col style="width:34%"></colgroup><tr><td class="c"><span style="display:inline-block;vertical-align:middle;margin-right:8px;height:34px">${P.logoId&&imgSrc(P.logoId)?`<img src="${imgSrc(P.logoId)}" style="height:34px">`:''}</span>โครงการ : ${esc(P.name)}</td><td class="ttl">สรุปส่งงาน/เบิกผลงาน ${b?'อาคาร '+esc(b):'ทุกอาคาร'}${kind?' · '+esc(KIND[kind]):''}</td><td class="c">วันที่ : ${esc(fmtDate(todayISO()))}</td></tr><tr><td class="c">ผู้ว่าจ้าง : ${esc(P.client||'')}</td><td class="c" style="text-align:center">หมวดงาน ${esc(P.category||'')}</td><td></td></tr></table>
      <table class="dt"><colgroup><col style="width:34px"><col style="width:46px"><col style="width:200px"><col style="width:84px"><col style="width:220px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:96px"><col style="width:54px"><col></colgroup>
      <thead><tr><th>ที่</th><th>อาคาร</th><th>ชุด</th><th>ประเภท</th><th>รายละเอียดงาน</th><th>มูลค่าสัญญา</th><th>เบิกก่อนหน้า</th><th class="cur">งวดล่าสุด</th><th>รวมเบิกสะสม</th><th>%</th><th>หมายเหตุ</th></tr></thead><tbody>
      ${ch.map((x,j)=>{const c=x.c,t=x.k.T;return`<tr><td class="c">${n0+j+1}</td><td class="c">${esc(c.building)}</td><td>${esc(c.name)}</td><td class="c">${esc(KIND[c.kind]||'')}</td><td style="font-size:10px">${esc(c.detail||'')}</td><td class="n">${c.skip?'-':f2(t.amt)}</td><td class="n">${c.skip?'-':f2(t.prevAmt)}</td><td class="n cur">${c.skip?'-':f2(t.curAmt)}${x.k.sub?` <span style="font-size:9px;color:#555">(ง.${x.k.no})</span>`:''}</td><td class="n">${c.skip?'-':f2(t.cumAmt)}</td><td class="n">${c.skip?'-':pct(t.pct)}</td><td class="warn">${esc([c.skip?'ไม่ส่งงานงวดนี้':'',c.note,x.k.missing?`ไม่มี BOQ ${x.k.missing} รายการ`:'',!x.k.rows.length&&!c.skip?'ยังไม่มีรายการ':''].filter(Boolean).join(' · '))}</td></tr>`}).join('')}
@@ -124,13 +144,17 @@ async function exportPages(pages,name,kind){
     if(kind==='html'){
       const doc=`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${esc(name)}</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Sarabun:wght@300;400;500;600;700&display=swap"><style>${DOC_CSS}body{margin:0;background:#777}.sheet{margin:12px auto}@page{size:A4 landscape;margin:0}@media print{body{background:none}.sheet{margin:0;page-break-after:always;break-after:page}}</style></head><body>${pageShell(pages)}</body></html>`;
       await saveFile(fn+'.html',new Blob([doc],{type:'text/html'}));return}
-    toast('กำลังสร้าง PDF…',4000);
+    toast('กำลังสร้าง PDF…',4000);await saveFile(fn+'.pdf',await pagesToPdf(pages));
+  }catch(e){toast('สร้างเอกสารไม่สำเร็จ: '+(e.message||e),5000)}
+}
+async function pagesToPdf(pages){
+  {
     const host=document.createElement('div');host.style.cssText='position:fixed;left:-9999px;top:0;width:1123px;z-index:-1';host.innerHTML=pageShell(pages);document.body.appendChild(host);
     if(document.fonts&&document.fonts.ready)await document.fonts.ready;await new Promise(r=>setTimeout(r,200));
     const pdf=new jspdf.jsPDF({unit:'mm',format:'a4',orientation:'l',compress:true});const sh=$$('.sheet',host);
     for(let i=0;i<sh.length;i++){if(i>0)pdf.addPage('a4','l');const cv=await html2canvas(sh[i],{scale:2,backgroundColor:'#ffffff',logging:false});pdf.addImage(cv.toDataURL('image/jpeg',.9),'JPEG',0,0,297,210,undefined,'FAST')}
-    host.remove();await saveFile(fn+'.pdf',pdf.output('blob'));
-  }catch(e){toast('สร้างเอกสารไม่สำเร็จ: '+(e.message||e),5000)}
+    host.remove();return pdf.output('blob');
+  }
 }
 (function(){const s=document.createElement('style');s.textContent=DOC_CSS+`.ov.full{background:var(--bg);display:flex;flex-direction:column;align-items:stretch;padding:0}.pvbar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}.pvbody{flex:1;overflow:auto;padding:12px}`;document.head.appendChild(s)})();
 

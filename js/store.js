@@ -18,10 +18,10 @@ function overlay(html,cls){const o=document.createElement('div');o.className='ov
 function armBtn(b,txt,fn){if(b.classList.contains('arm')){clearTimeout(b._t);b.classList.remove('arm');b.textContent=b._o;fn();return}b._o=b.textContent;b.textContent=txt;b.classList.add('arm');b._t=setTimeout(()=>{b.classList.remove('arm');b.textContent=b._o},3000)}
 
 /* ----- โครงสร้างข้อมูล ----- */
-const COLL={crews:'wd_crew',boq:'wd_boq',rooms:'wd_room',subs:'wd_sub'};
+const COLL={crews:'wd_crew',boq:'wd_boq',rooms:'wd_room',subs:'wd_sub',plans:'wd_plan'};
 const GRP='wd';
 const KIND={sub:'ผรม. (เหมา)',dc:'แรง DC บริษัท'};
-let S={project:{name:'MODEVA',client:'KMIT',category:'สถาปัตย์',company:'KMIT Construction',buildings:['D','E','F&J','G'],editors:[]},crews:[],boq:[],rooms:[],subs:[]};
+let S={project:{name:'MODEVA',client:'KMIT',category:'สถาปัตย์',company:'KMIT Construction',buildings:['D','E','F&J','G'],editors:[]},crews:[],boq:[],rooms:[],subs:[],plans:[]};
 const MODE={kind:'local',sb:null,email:'',ok:true,pending:0,msg:'บันทึกในเครื่องนี้'};
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){toast('พื้นที่เก็บข้อมูลในเครื่องเต็ม',4000)}}};
 let DIRTY=new Set(LS.get('wd:dirty',[])),DELS=LS.get('wd:dels',[]),SYNCED=new Set(LS.get('wd:synced',[]));
@@ -48,6 +48,7 @@ function cloudSoon(){if(MODE.kind!=='cloud')return;clearTimeout(_cs);_cs=setTime
 async function cloudFlush(){
   if(MODE.kind!=='cloud'||_busy)return;_busy=true;
   try{
+    await pushImages();
     const rows=[];for(const k of [...DIRTY]){const[c,id]=k.split('/');
       if(c==='wd_project'){rows.push(rowOf('wd_project',{id:'project',..._projectDoc()}));continue}
       const list=Object.keys(COLL).find(x=>COLL[x]===c);const o=list&&by(list,id);if(o)rows.push(rowOf(c,o))}
@@ -59,6 +60,27 @@ async function cloudFlush(){
     MODE.ok=true;
   }catch(e){MODE.ok=!(/fetch|network|Failed|timeout/i.test(String(e&&e.message)));if(MODE.ok)toast('ส่งขึ้นระบบไม่สำเร็จ: '+(e.message||e),5000);else _cs=setTimeout(cloudFlush,8000)}
   _busy=false;persist();
+}
+/* ----- รูป: เก็บในเครื่อง (IndexedDB) + อัปโหลดขึ้น bucket เดิม inspection-images (ชื่อไฟล์ขึ้นต้น wd-) ----- */
+const IMGDATA=new Map();let IDBH=null;const BUCKET='inspection-images';let IMGQ=new Set(LS.get('wd:imgq',[]));
+function openIDB(){return new Promise((res,rej)=>{try{const q=indexedDB.open('workdesk-v1',1);q.onupgradeneeded=()=>q.result.createObjectStore('img');q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)}catch(e){rej(e)}})}
+const idbReq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function initImages(){try{IDBH=await openIDB();const st=IDBH.transaction('img').objectStore('img');const ks=await idbReq(st.getAllKeys()),vs=await idbReq(st.getAll());ks.forEach((k,i)=>IMGDATA.set(k,vs[i]))}catch(e){IDBH=null}}
+async function putImage(url){const id='im'+uid();IMGDATA.set(id,url);
+  if(IDBH){try{IDBH.transaction('img','readwrite').objectStore('img').put(url,id)}catch(e){}}
+  if(MODE.kind==='cloud'){IMGQ.add(id);LS.set('wd:imgq',[...IMGQ]);cloudSoon()}return id}
+const imgSrc=id=>{if(!id)return'';const v=IMGDATA.get(id);if(v)return v;if(MODE.kind==='cloud')return String(cfg().SUPABASE_URL).replace(/\/$/,'')+'/storage/v1/object/public/'+BUCKET+'/wd-'+encodeURIComponent(id);return''};
+const dataUrlToBlob=u=>{const[h,b]=u.split(',');const mime=/:(.*?);/.exec(h)[1];const bin=atob(b);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})};
+async function pushImages(){
+  for(const id of [...IMGQ]){const u=IMGDATA.get(id);if(!u){IMGQ.delete(id);continue}
+    const blob=dataUrlToBlob(u);const{error}=await MODE.sb.storage.from(BUCKET).upload('wd-'+id,blob,{contentType:blob.type,upsert:true,cacheControl:'31536000'});if(error)throw error;IMGQ.delete(id)}
+  LS.set('wd:imgq',[...IMGQ]);
+}
+/* ให้ทุก id มี data: URL (ใช้ตอนสร้าง PDF / HTML) */
+async function ensureData(ids,png){
+  for(const id of ids){if(!id||(IMGDATA.has(id)&&String(IMGDATA.get(id)).startsWith('data:')))continue;
+    try{const s=imgSrc(id);const im=await loadImgEl(/^https?:/.test(s)?s+(s.includes('?')?'&':'?')+'cors=1':s);const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const x=c.getContext('2d');
+      if(!png){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)}x.drawImage(im,0,0);IMGDATA.set(id,c.toDataURL(png?'image/png':'image/jpeg',.92))}catch(e){}}
 }
 const _projectDoc=()=>({project:{...S.project}});
 async function cloudLoad(){
@@ -87,6 +109,7 @@ async function logout(){try{await MODE.sb.auth.signOut()}catch(e){}location.relo
 
 /* ----- เริ่มระบบ ----- */
 async function initStore(){
+  await initImages();
   const d=LS.get('wd:data',null);
   if(d){S=Object.assign(S,d);S.project=Object.assign({editors:[],buildings:['D','E','F&J','G']},d.project||{})}
   tagAll();

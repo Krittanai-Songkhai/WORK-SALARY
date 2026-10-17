@@ -3,10 +3,10 @@ const UI={tab:'home',b:'',kind:'',crew:null,sub:null,q:''};
 const bOpts=(sel,all)=>(all?`<option value="" ${sel===''?'selected':''}>${all}</option>`:'')+S.project.buildings.map(b=>`<option ${b===sel?'selected':''}>${esc(b)}</option>`).join('');
 const kindOpts=(sel,all)=>(all?`<option value="">${all}</option>`:'')+Object.keys(KIND).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${KIND[k]}</option>`).join('');
 const bar=p=>`<div class="pbar"><i style="width:${Math.min(100,Math.max(0,p))}%"></i></div>`;
-const TABS=[['home','ภาพรวม'],['crews','ชุดช่าง'],['boq','BOQ'],['rooms','ตารางห้อง'],['set','ตั้งค่า']];
+const TABS=[['home','ภาพรวม'],['crews','ชุดช่าง'],['boq','BOQ'],['rooms','ตารางห้อง'],['plans','แบบ'],['set','ตั้งค่า']];
 
 function viewTop(){
-  return`<div class="brand"><b>Work Desk</b><span>${esc(S.project.name)} · ส่งงาน / เบิกผลงาน</span></div>
+  return`${S.project.logoId&&imgSrc(S.project.logoId)?`<img class="tlogo" src="${imgSrc(S.project.logoId)}" alt="">`:''}<div class="brand"><b>Work Desk</b><span>${esc(S.project.name)} · ส่งงาน / เบิกผลงาน</span></div>
    <div class="nav">${TABS.map(t=>`<button data-act="tab" data-v="${t[0]}" aria-current="${UI.tab===t[0]&&!UI.crew}">${t[1]}</button>`).join('')}</div><span id="sync">${statusHTML()}</span>`;
 }
 
@@ -18,7 +18,7 @@ function viewHome(){
   const noRows=act.filter(c=>!crewRows(c).length).length;const miss=unlinkedCount();
   let h=`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto">ภาพรวมส่งงาน / เบิกผลงาน</h1>
    <select id="fb" style="width:auto">${bOpts(UI.b,'ทุกอาคาร')}</select><select id="fk" style="width:auto">${kindOpts(UI.kind,'ทุกประเภท')}</select>
-   <button class="btn pri" data-act="bpdf">สรุป PDF</button><button class="btn" data-act="bxls">Excel</button></div>
+   <button class="btn pri" data-act="bpdf">สรุปรวม PDF</button><button class="btn" data-act="zipcrews">ส่งออกแยกชุด (ZIP)</button><button class="btn" data-act="bxls">Excel</button></div>
    <div class="stats"><div><b>${act.length}</b><span>ชุดที่ใช้งาน</span></div><div><b class="mono">${f2(T.amt)}</b><span>มูลค่าสัญญารวม (บาท)</span></div><div><b class="mono" style="color:var(--good)">${f2(T.cum)}</b><span>เบิกสะสม (บาท)</span></div><div><b class="mono">${pct(T.amt?T.cum/T.amt*100:0)}</b><span>ความคืบหน้า</span></div>
    <div><b style="color:${miss?'var(--warn)':'var(--good)'}">${miss}</b><span>รายการไม่มี BOQ คลุม</span></div><div><b style="color:${noRows?'var(--warn)':'var(--good)'}">${noRows}</b><span>ชุดที่ยังไม่มีรายการงาน</span></div></div>`;
   for(const b of S.project.buildings.filter(b=>!UI.b||b===UI.b)){
@@ -27,7 +27,7 @@ function viewHome(){
      <div class="tblwrap"><table class="grid-t"><thead><tr><th>ชุด</th><th>ประเภท</th><th>รูปแบบ</th><th class="r">มูลค่าสัญญา</th><th class="r">เบิกงวดล่าสุด</th><th class="r">สะสม</th><th style="width:140px">ความคืบหน้า</th><th>งวด</th><th></th></tr></thead><tbody>
      ${list.map(c=>{const k=calcCrew(c);const n=subsOf(c).length;const ls=subsOf(c)[n-1];return`<tr data-act="opencrew" data-id="${c.id}" class="${c.skip?'dim':''}"><td><b>${esc(c.name)}</b>${c.skip?' <span class="chip">ไม่ส่ง</span>':''}<div class="small muted">${esc(c.detail||c.note||'')}</div></td><td class="small">${esc(KIND[c.kind])}</td><td class="small">${c.mode==='room'?'ตารางห้อง':'รายการงาน'}</td>
       <td class="r mono">${k.rows.length?f2(k.T.amt):'<span class="muted">—</span>'}</td><td class="r mono">${n?f2(k.T.curAmt):'-'}</td><td class="r mono">${k.rows.length?f2(k.T.cumAmt):'-'}</td><td>${k.rows.length?bar(k.T.pct)+`<span class="small">${pct(k.T.pct)}</span>`:'<span class="chip warn">ยังไม่มีรายการ</span>'}</td>
-      <td class="small">${n?`ง.${ls.no} ${ls.sent?'<span class="chip good">ส่งแล้ว</span>':'<span class="chip">ร่าง</span>'}`:'-'}${k.missing?`<div><span class="chip warn">ไม่มี BOQ ${k.missing}</span></div>`:''}</td><td><button class="btn sm" data-act="opencrew" data-id="${c.id}">เปิด</button></td></tr>`}).join('')}</tbody></table></div>`;
+      <td class="small">${n?`ง.${ls.no} ${ls.sent?'<span class="chip good">ส่งแล้ว</span>':'<span class="chip">ร่าง</span>'}`:'-'}${k.missing?`<div><span class="chip warn">ไม่มี BOQ ${k.missing}</span></div>`:''}</td><td class="nw"><button class="btn sm" data-act="opencrew" data-id="${c.id}">เปิด</button> <button class="btn sm" data-act="crewpdf" data-id="${c.id}">PDF</button></td></tr>`}).join('')}</tbody></table></div>`;
   }
   if(!cs.length)h+='<div class="empty">ยังไม่มีชุดช่าง กด “เพิ่มชุด”</div>';
   return h;
@@ -85,7 +85,7 @@ function viewSub(){
    <div class="panel"><div class="grid"><label class="f">ตั้งแต่วันที่<input type="date" data-s="from" value="${esc(s.from||'')}"></label><label class="f">ถึงวันที่<input type="date" data-s="to" value="${esc(s.to||'')}"></label><label class="f">วันที่ส่งเอกสาร<input type="date" data-s="date" value="${esc(s.date||'')}"></label>
    <label class="f">หมายเหตุงวด<input type="text" data-s="note" value="${esc(s.note||'')}"></label><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin-top:18px"><input type="checkbox" data-s="sent" ${s.sent?'checked':''}> ส่งเอกสารแล้ว</label></div></div>
    <div class="stats" id="substats">${subStats(k)}</div>`;
-  if(!k.rows.length)return h+'<div class="empty">ชุดนี้ยังไม่มีรายการงาน กลับไปเพิ่มรายการ / เลือกห้องก่อน</div>';
+  if(!k.rows.length)return h+'<div class="empty">ชุดนี้ยังไม่มีรายการงาน กลับไปเพิ่มรายการ / เลือกห้องก่อน</div>'+subAttach(s);
   if(c.mode==='room'){
     const items=itemAgg(k);const rooms=roomsOf(c).filter(r=>items.some(it=>k.rows.some(x=>x.key===r.id+'~'+it.boqId)));let fl=null;const rowOf=new Map(k.rows.map(r=>[r.key,r]));
     h+=`<div class="row" style="margin:8px 0"><button class="btn sm" data-act="fillall">เติมคงเหลือทั้งหมดเป็น “เสร็จ”</button><button class="btn sm" data-act="clearall">ล้างงวดนี้</button><span class="small muted">กรอกปริมาณ ตร.ม. ที่ทำเสร็จในงวดนี้ (ไม่ใช่สะสม)</span></div>
@@ -98,7 +98,15 @@ function viewSub(){
     ${k.rows.map(r=>`<tr><td>${esc(r.floor)}</td><td>${esc(r.name)}</td><td class="r mono">${fq(r.qty)}</td><td>${esc(r.unit)}</td><td class="r mono">${f2(r.rate)}</td><td class="r mono muted" data-c="${r.key}:prev">${r.prev?fq(r.prev):'-'}</td><td><input type="number" step="any" data-e="${r.key}" value="${r.cur||''}" placeholder="0"></td>
      <td class="nw">${[25,50,100].map(p=>`<button class="btn sm" data-act="pctline" data-key="${r.key}" data-p="${p}">${p===100?'เสร็จ':'+'+p+'%'}</button>`).join('')}</td><td class="r mono" data-c="${r.key}:cum">${fq(r.cum)}</td><td class="r mono" data-c="${r.key}:pct">${pct(r.pct)}</td><td class="r mono" data-c="${r.key}:amt">${f2(r.curAmt)}</td><td class="small" style="color:var(--warn)">${esc(rowNote(r))}</td></tr>`).join('')}</tbody></table></div>`;
   }
-  return h;
+  return h+subAttach(s);
+}
+function subAttach(s){
+  const pl=s.plans||[],ph=s.photos||[];
+  return`<div class="panel" style="margin-top:14px"><h3>แบบประกอบ <span class="chip">${pl.length}</span><button class="btn sm" style="margin-left:auto" data-act="addplan">＋ เลือกแบบจากคลัง</button></h3>
+   ${pl.length?`<div class="cards">${pl.map(p=>`<div class="card"><div class="thumb" data-act="markplan" data-id="${p.id}">${annotatedSvg(imgSrc(p.imgId),p.w,p.h,p.shapes||[],[],{scale:p.sym})}</div><div class="body"><input type="text" data-sp="${p.id}" value="${esc(p.name||'')}"><div class="row" style="margin-top:6px"><button class="btn sm" data-act="markplan" data-id="${p.id}">วาดทับ / ระบายสี</button><button class="btn sm bad" data-act="delplan" data-id="${p.id}">เอาออก</button></div></div></div>`).join('')}</div>`:'<div class="empty small">ยังไม่ได้แนบแบบ — ใช้แสดงตำแหน่งงานที่ส่ง (ระบายสีโซนบนแบบได้)</div>'}</div>
+   <div class="panel"><h3>รูปถ่ายประกอบ <span class="chip">${ph.length}</span><span style="margin-left:auto" class="row"><label class="btn sm pri" for="subcam">📷 ถ่ายรูป</label><input id="subcam" type="file" accept="image/*" capture="environment" hidden><label class="btn sm" for="subpic">🖼 อัปโหลด</label><input id="subpic" type="file" accept="image/*" multiple hidden></span></h3>
+   ${ph.length?`<div class="cards">${ph.map((p,i)=>`<div class="card"><div class="thumb" data-act="markphoto" data-id="${p.id}">${annotatedSvg(imgSrc(p.imgId),p.w,p.h,p.shapes||[],[])}</div><div class="body"><div class="row"><b class="mono">รูปที่ ${i+1}</b><span style="margin-left:auto" class="row"><button class="btn sm" data-act="mvphoto" data-id="${p.id}" data-d="-1" ${i===0?'disabled':''}>←</button><button class="btn sm" data-act="mvphoto" data-id="${p.id}" data-d="1" ${i===ph.length-1?'disabled':''}>→</button></span></div>
+     <input type="text" data-sph="${p.id}" value="${esc(p.caption||'')}" placeholder="คำอธิบาย"><div class="row" style="margin-top:6px"><button class="btn sm" data-act="markphoto" data-id="${p.id}">ลูกศร / ข้อความ</button><button class="btn sm bad" data-act="delphoto" data-id="${p.id}">ลบ</button></div></div></div>`).join('')}</div>`:'<div class="empty small">ยังไม่มีรูป — ถ่ายหรืออัปโหลดรูปหน้างานแนบกับเอกสารส่งงานนี้</div>'}</div>`;
 }
 const subStats=k=>`<div><b class="mono">${f2(k.T.amt)}</b><span>มูลค่าสัญญา</span></div><div><b class="mono">${f2(k.T.prevAmt)}</b><span>เบิกก่อนหน้า</span></div><div><b class="mono" style="color:var(--accent)">${f2(k.T.curAmt)}</b><span>เบิกงวดนี้ (${pct(k.T.curPct)})</span></div><div><b class="mono" style="color:var(--good)">${f2(k.T.cumAmt)}</b><span>สะสม (${pct(k.T.pct)})</span></div>`;
 
@@ -128,12 +136,25 @@ function viewRooms(){
   return h;
 }
 
+/* ---- คลังแบบ ---- */
+function viewPlans(){
+  const b=UI.b||S.project.buildings[0];const list=S.plans.filter(p=>p.building===b);
+  const files=new Map();list.forEach(p=>{const k=p.fileId||p.id;if(!files.has(k))files.set(k,[]);files.get(k).push(p)});
+  let h=`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto">คลังแบบ</h1><select id="fb" style="width:auto">${bOpts(b)}</select><label class="btn pri" for="planf">＋ อัปโหลดแบบ (PDF / รูป)</label><input id="planf" type="file" accept="application/pdf,image/*" multiple hidden></div>
+   <p class="hint">อัปโหลดครั้งเดียว แล้วเลือกไปแนบในเอกสารส่งงานของแต่ละชุด ระบายสีโซน/ใส่ข้อความทับบนแบบได้ (แยกกันในแต่ละงวด) · PDF หลายหน้าจะแยกเป็นหน้าให้</p>`;
+  for(const[k,pg] of files){pg.sort((a,z)=>(a.page||1)-(z.page||1));
+    h+=`<div class="ghead l1"><b>${esc(pg[0].fileName||pg[0].name)}</b><span class="small muted">${pg.length} หน้า</span><button class="btn sm bad" style="margin-left:auto" data-act="delplanfile" data-id="${k}">ลบไฟล์</button></div>
+     <div class="cards">${pg.map(p=>`<div class="card"><div class="thumb" data-act="viewplan" data-id="${p.id}">${annotatedSvg(imgSrc(p.imgId),p.w,p.h,p.shapes||[],[])}</div><div class="body"><input type="text" data-pl="${p.id}" value="${esc(p.name)}"></div></div>`).join('')}</div>`}
+  if(!files.size)h+='<div class="empty">ยังไม่มีแบบของอาคารนี้</div>';
+  return h;
+}
 /* ---- ตั้งค่า ---- */
 function viewSet(){
   const P=S.project;
   return`<h1 style="font-size:22px;margin-bottom:10px">ตั้งค่า</h1>
    <div class="panel"><h3>โครงการ</h3><div class="grid g2"><label class="f">ชื่อโครงการ<input type="text" data-p="name" value="${esc(P.name)}"></label><label class="f">ผู้ว่าจ้าง<input type="text" data-p="client" value="${esc(P.client||'')}"></label><label class="f">หมวดงาน<input type="text" data-p="category" value="${esc(P.category||'')}"></label><label class="f">บริษัท<input type="text" data-p="company" value="${esc(P.company||'')}"></label>
    <label class="f">อาคาร (คั่นด้วยจุลภาค)<input type="text" id="bldg" value="${esc(P.buildings.join(', '))}"></label></div></div>
+   <div class="panel"><h3>โลโก้บริษัท <span class="small muted" style="font-weight:400">แสดงมุมซ้ายของเอกสารทุกใบและแถบด้านบน</span></h3><div class="row">${P.logoId&&imgSrc(P.logoId)?`<img src="${imgSrc(P.logoId)}" style="height:56px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px">`:'<span class="muted small">ยังไม่มีโลโก้</span>'}<label class="btn" for="logof">${P.logoId?'เปลี่ยนโลโก้':'อัปโหลดโลโก้'}</label><input id="logof" type="file" accept="image/*" hidden>${P.logoId?'<button class="btn bad sm" data-act="dellogo">ลบ</button>':''}</div></div>
    <div class="panel"><h3>ระบบออนไลน์ (Supabase)</h3><div class="row"><span id="sync2">${statusHTML()}</span>${MODE.kind==='cloud'?`<span class="small">เข้าสู่ระบบ: ${esc(MODE.email)}</span><button class="btn sm" data-act="syncnow">ซิงก์ตอนนี้</button><button class="btn sm" data-act="logout">ออกจากระบบ</button>`:cloudOn()?'<button class="btn pri sm" data-act="login">เข้าสู่ระบบ</button><span class="small muted">ตอนนี้เก็บเฉพาะในเครื่องนี้</span>':'<span class="small muted">ยังไม่ได้ตั้งค่า config.js — เก็บในเครื่องนี้</span>'}</div>
     ${MODE.kind==='cloud'?`<p class="hint" style="margin-top:8px">ข้อมูลเงินถูกตั้งเป็น “เฉพาะสมาชิกที่ล็อกอิน” เจ้าของโครงการ (คนแรกที่ซิงก์) ให้สิทธิ์แก้ไขทีมงานได้ด้านล่าง</p><label class="f">อีเมลผู้ร่วมแก้ไข (คั่นด้วยจุลภาค)<input type="text" id="eds" value="${esc((P.editors||[]).join(', '))}"></label><div class="row" style="margin-top:6px"><button class="btn sm" data-act="saveacl">บันทึกสิทธิ์</button></div>`:''}</div>
    <div class="panel"><h3>สำรอง / ย้ายข้อมูล</h3><div class="row"><button class="btn" data-act="bkup">ดาวน์โหลดไฟล์สำรอง (JSON)</button><label class="btn" for="bkin">กู้คืนจากไฟล์สำรอง</label><input type="file" id="bkin" accept=".json" hidden><button class="btn" data-act="sample">โหลดข้อมูลตัวอย่าง (BOQ/ห้อง อาคาร D)</button><button class="btn bad" data-act="wipe">ล้างข้อมูลทั้งหมดในเครื่อง</button></div></div>`;
@@ -142,6 +163,6 @@ function viewSet(){
 function render(){
   $('#top').innerHTML=viewTop();
   const m=$('#main');const sc=window.scrollY;
-  m.innerHTML=UI.sub?viewSub():UI.crew?viewCrew():UI.tab==='crews'?viewCrews():UI.tab==='boq'?viewBoq():UI.tab==='rooms'?viewRooms():UI.tab==='set'?viewSet():viewHome();
+  m.innerHTML=UI.sub?viewSub():UI.crew?viewCrew():UI.tab==='crews'?viewCrews():UI.tab==='boq'?viewBoq():UI.tab==='rooms'?viewRooms():UI.tab==='plans'?viewPlans():UI.tab==='set'?viewSet():viewHome();
   window.scrollTo(0,sc);
 }

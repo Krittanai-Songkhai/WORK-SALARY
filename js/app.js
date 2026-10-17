@@ -8,7 +8,50 @@ function refreshSub(){
 }
 function setSubEntry(s,key,v){const n=num(v);s.entries=s.entries||{};if(n)s.entries[key]=n;else delete s.entries[key];save(s)}
 
+const curSubCrew=()=>{const s=curSub();return s&&by('crews',s.crewId)};
+async function fileToPng(file,max){const im=await createImageBitmap(file);const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/png')}
+function xlsxBlob(c,no){const wb=XLSX.utils.book_new();const k=calcCrew(c,no);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(crewAOA(c,no)),('งวด '+k.no).slice(0,30));return new Blob([XLSX.write(wb,{type:'array',bookType:'xlsx'})],{type:'application/octet-stream'})}
+const markBoard=(o,kind,title,extra)=>openBoard(Object.assign({kind,title,imgUrl:imgSrc(o.imgId),w:o.w,h:o.h,shapes:(o.shapes=o.shapes||[]),noPin:true,onChange:()=>save(curSub()||o),onClose:()=>render()},extra||{}));
 const ACT={
+  async crewpdf(el){const c=by('crews',el.dataset.id);const ss=subsOf(c);if(!ss.length){toast('ชุดนี้ยังไม่มีงวด — เปิดชุดแล้วกด “เริ่มงวดใหม่”');return}
+    const no=ss[ss.length-1].no;toast('กำลังสร้าง PDF…',3000);exportPages(await crewDocReady(c,no),`${c.building}_${c.name}_งวด${no}`,'pdf')},
+  zipcrews(){
+    if(!window.JSZip){toast('ยังโหลดตัวสร้าง ZIP ไม่ได้ (ต้องมีอินเทอร์เน็ตครั้งแรก)');return}
+    const cs=S.crews.filter(c=>(!UI.b||c.building===UI.b)&&(!UI.kind||c.kind===UI.kind)).sort((a,z)=>natCmp(a.building,z.building));
+    const o=overlay(`<div class="box wide"><div class="row" style="margin-bottom:8px"><h3 style="margin-right:auto">ส่งออกแยกชุดช่าง (ไฟล์ละชุด รวมเป็น ZIP)</h3><button class="btn" data-x="close">ปิด</button></div>
+     <p class="hint">ใช้งวดล่าสุดของแต่ละชุด รวมแบบและรูปที่แนบไว้ในงวดนั้น</p>
+     <div class="row" style="margin-bottom:8px"><label><input type="checkbox" id="zfp" checked> PDF</label><label><input type="checkbox" id="zfx"> Excel</label><span style="margin-left:auto" class="row"><button class="btn sm" data-x="all">เลือกทั้งหมด</button><button class="btn sm" data-x="none">ล้าง</button></span></div>
+     ${cs.map(c=>{const n=subsOf(c).length;return`<label class="pickrow ${n?'':'dim'}"><input type="checkbox" value="${c.id}" ${n&&!c.skip?'checked':''} ${n?'':'disabled'}><span style="flex:1"><b>${esc(c.name)}</b> <span class="small muted">อาคาร ${esc(c.building)}</span></span><span class="small muted">${n?'งวดล่าสุด '+subsOf(c)[n-1].no:'ยังไม่มีงวด'}</span></label>`}).join('')}
+     <div class="row" style="margin-top:10px;justify-content:flex-end"><span class="small muted" id="zst" style="margin-right:auto"></span><button class="btn pri" data-x="go">สร้าง ZIP</button></div></div>`,'modal');
+    o.addEventListener('click',async e=>{const b=e.target.closest('[data-x]');if(!b){if(e.target===o)o.remove();return}const x=b.dataset.x;
+      if(x==='close'){o.remove();return}
+      if(x==='all'||x==='none'){$$('input[value]:not(:disabled)',o).forEach(i=>i.checked=x==='all');return}
+      const ids=$$('input[value]:checked',o).map(i=>i.value);const wp=$('#zfp',o).checked,wx=$('#zfx',o).checked;if(!ids.length||(!wp&&!wx)){toast('เลือกชุดและรูปแบบไฟล์ก่อน');return}
+      b.disabled=true;const zip=new JSZip();const used=new Set();let i=0;
+      try{for(const id of ids){const c=by('crews',id);const ss=subsOf(c);const no=ss[ss.length-1].no;i++;$('#zst',o).textContent=`กำลังสร้าง ${i}/${ids.length}: ${c.name}`;
+        let base=safeName(`${c.building}_${c.name}_งวด${no}`);while(used.has(base))base+='_';used.add(base);
+        if(wp)zip.file(base+'.pdf',await pagesToPdf(await crewDocReady(c,no)));if(wx)zip.file(base+'.xlsx',xlsxBlob(c,no))}
+        const out=await zip.generateAsync({type:'blob'});await saveFile(safeName(`ส่งงาน_${UI.b||'ทุกอาคาร'}_${todayISO()}`)+'.zip',out);toast(`สร้าง ZIP ${ids.length} ชุดแล้ว`);o.remove()}
+      catch(err){toast('สร้าง ZIP ไม่สำเร็จ: '+(err.message||err),5000);b.disabled=false}});
+  },
+  addplan(){
+    const c=curSubCrew();const list=S.plans.filter(p=>p.building===c.building);
+    if(!list.length){toast('ยังไม่มีแบบของอาคาร '+c.building+' — ไปแท็บ “แบบ” เพื่ออัปโหลดก่อน',4000);return}
+    const files=new Map();list.forEach(p=>{const k=p.fileId||p.id;if(!files.has(k))files.set(k,[]);files.get(k).push(p)});
+    const o=overlay(`<div class="box wide"><div class="row" style="margin-bottom:8px"><h3 style="margin-right:auto">เลือกแบบ อาคาร ${esc(c.building)}</h3><button class="btn" data-x="close">ปิด</button></div>
+     ${[...files.values()].map(pg=>{pg.sort((a,z)=>(a.page||1)-(z.page||1));return`<div class="ghead l1"><b>${esc(pg[0].fileName||pg[0].name)}</b></div><div class="roomgrid">${pg.map(p=>`<label class="rchip"><input type="checkbox" value="${p.id}"> <span>${esc(p.name)}</span></label>`).join('')}</div>`}).join('')}
+     <div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn pri" data-x="go">แนบที่เลือก</button></div></div>`,'modal');
+    o.addEventListener('click',e=>{const b=e.target.closest('[data-x]');if(!b){if(e.target===o)o.remove();return}if(b.dataset.x==='close'){o.remove();return}
+      const s=curSub();s.plans=s.plans||[];$$('input:checked',o).forEach(i=>{const p=by('plans',i.value);s.plans.push({id:uid(),libId:p.id,imgId:p.imgId,w:p.w,h:p.h,name:p.name,shapes:clone(p.shapes||[]),sym:p.sym||1})});save(s);o.remove();render()});
+  },
+  markplan(el){const s=curSub();const p=s.plans.find(x=>x.id===el.dataset.id);markBoard(p,'plan','แบบ · '+p.name,{scale:()=>p.sym||1,onScale:v=>{p.sym=v;save(s)},onFlip:async ax=>{const id=await flippedImageId(p.imgId,ax);p.imgId=id;mirrorShapes(p.shapes,p.w,p.h,ax);save(s);return imgSrc(id)}})},
+  delplan(el){const s=curSub();s.plans=s.plans.filter(x=>x.id!==el.dataset.id);save(s);render()},
+  markphoto(el){const s=curSub();const p=s.photos.find(x=>x.id===el.dataset.id);markBoard(p,'photo','รูปที่ '+(s.photos.indexOf(p)+1))},
+  delphoto(el){const s=curSub();s.photos=s.photos.filter(x=>x.id!==el.dataset.id);save(s);render()},
+  mvphoto(el){const s=curSub();const i=s.photos.findIndex(x=>x.id===el.dataset.id);const j=i+ +el.dataset.d;if(j<0||j>=s.photos.length)return;[s.photos[i],s.photos[j]]=[s.photos[j],s.photos[i]];save(s);render()},
+  viewplan(el){const p=by('plans',el.dataset.id);openBoard({kind:'plan',title:p.name,imgUrl:imgSrc(p.imgId),w:p.w,h:p.h,shapes:(p.shapes=p.shapes||[]),noPin:true,scale:()=>p.sym||1,onScale:v=>{p.sym=v;save(p)},onChange:()=>save(p),onClose:()=>render()})},
+  delplanfile(el){armBtn(el,'ลบทั้งไฟล์?',()=>{S.plans.filter(p=>(p.fileId||p.id)===el.dataset.id).forEach(p=>del('plans',p.id));render()})},
+  dellogo(){S.project.logoId='';save();render()},
   tab(el){UI.tab=el.dataset.v;UI.crew=UI.sub=null;render()},
   back(){UI.crew=null;render()},
   backcrew(){UI.sub=null;render()},
@@ -31,7 +74,7 @@ const ACT={
   roomsnone(){const c=by('crews',UI.crew);c.roomIds=[];save(c);render()},
   newsub(){const c=by('crews',UI.crew);const s=newSub(c);UI.sub=s.id;render();scrollTo(0,0)},
   opensub(el){UI.sub=el.dataset.id;render();scrollTo(0,0)},
-  docsub(el){const s=by('subs',el.dataset.id);const c=by('crews',s.crewId);previewDoc(crewDocPages(c,s.no),`${c.building}_${c.name}_งวด${s.no}`)},
+  async docsub(el){const s=by('subs',el.dataset.id);const c=by('crews',s.crewId);previewDoc(await crewDocReady(c,s.no),`${c.building}_${c.name}_งวด${s.no}`)},
   xlssub(el){const s=by('subs',el.dataset.id);exportXlsx(by('crews',s.crewId),s.no)},
   delsub(el){armBtn(el,'กดอีกครั้งเพื่อลบงวด',()=>{const s=curSub();UI.sub=null;UI.crew=s.crewId;del('subs',s.id);render()})},
   fillall(){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
@@ -39,7 +82,7 @@ const ACT={
   fullroom(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.filter(r=>r.roomId===el.dataset.id).forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
   pctline(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===el.dataset.key);const p=+el.dataset.p;
     const v=p===100?Math.max(0,r.qty-r.prev):r.qty*p/100;setSubEntry(s,r.key,+v.toFixed(4));render()},
-  bpdf(){const pg=buildingPages(UI.b,UI.kind);previewDoc(pg,'สรุปส่งงาน_'+(UI.b||'ทุกอาคาร'))},
+  async bpdf(){await ensureData([S.project.logoId],true);const pg=buildingPages(UI.b,UI.kind);previewDoc(pg,'สรุปส่งงาน_'+(UI.b||'ทุกอาคาร'))},
   bxls(){exportBuildingXlsx(UI.b)},
   newboq(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:'',name:'',unit:'',qty:0,rate:0,note:''});render()},
   delboq(el){armBtn(el,'ลบ?',()=>{del('boq',el.dataset.id);render()})},
@@ -72,6 +115,9 @@ document.addEventListener('input',e=>{
   if(d.rm2){const[id,f]=d.rm2.split(':');setField(by('rooms',id),f,t.value);return}
   if(d.r){const[id,iid]=d.r.split(':');const r=by('rooms',id);r.qty=r.qty||{};const n=num(t.value);if(n)r.qty[iid]=n;else delete r.qty[iid];save(r);
     const tot=$(`[data-rt="${iid}"]`);if(tot)tot.innerHTML='<b>'+fq(S.rooms.filter(x=>x.building===r.building).reduce((a,x)=>a+num((x.qty||{})[iid]),0))+'</b>';return}
+  if(d.sp){const s=curSub();const p=s.plans.find(x=>x.id===d.sp);p.name=t.value;save(s);return}
+  if(d.sph){const s=curSub();const p=s.photos.find(x=>x.id===d.sph);p.caption=t.value;save(s);return}
+  if(d.pl){const p=by('plans',d.pl);p.name=t.value;save(p);return}
   if(d.rate){const c=by('crews',UI.crew);c.rates[d.rate]=num(t.value);save(c);return}
   if(d.p){S.project[d.p]=t.value;save();const b=$('.brand span');if(b)b.textContent=S.project.name+' · ส่งงาน / เบิกผลงาน';return}
   if(t.id==='bldg'){return}
@@ -81,6 +127,17 @@ document.addEventListener('change',async e=>{
   if(t.id==='fb'){UI.b=t.value;render();return}
   if(t.id==='fk'){UI.kind=t.value;render();return}
   if(t.id==='bldg'){const bs=t.value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);if(bs.length){S.project.buildings=bs;save();render()}return}
+  if(t.id==='planf'){const fs=[...t.files];t.value='';if(!fs.length)return;const b=UI.b||S.project.buildings[0];
+    for(const f of fs){try{toast('กำลังอ่านไฟล์ '+f.name+'…',20000);const base=f.name.replace(/\.[^.]+$/,'');const fid='fl'+uid();
+      if(/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name)){const pgs=await pdfToImages(f,40,(n,m)=>toast(`${f.name} หน้า ${n}/${m}`,20000));
+        for(const g of pgs){const imgId=await putImage(g.url);add('plans',{building:b,fileId:fid,fileName:base,page:g.page,pages:g.pages,name:g.pages>1?`${base} หน้า ${g.page}`:base,imgId,w:g.w,h:g.h,shapes:[]})}}
+      else{const im=await fileToImage(f,2800,.9);const imgId=await putImage(im.url);add('plans',{building:b,fileId:fid,fileName:base,page:1,pages:1,name:base,imgId,w:im.w,h:im.h,shapes:[]})}
+    }catch(x){toast('อ่านไฟล์แบบไม่สำเร็จ: '+(x.message||x),5000)}}
+    toast('เพิ่มแบบแล้ว');render();return}
+  if(t.id==='subcam'||t.id==='subpic'){const fs=[...t.files];t.value='';const s=curSub();if(!s||!fs.length)return;s.photos=s.photos||[];
+    for(const f of fs){if(!f.type.startsWith('image/'))continue;try{const im=await fileToImage(f,1400,.8);const imgId=await putImage(im.url);s.photos.push({id:uid(),imgId,w:im.w,h:im.h,caption:'',shapes:[]})}catch(x){toast('อ่านรูปไม่ได้')}}
+    save(s);render();return}
+  if(t.id==='logof'){const f=t.files[0];t.value='';if(!f)return;try{S.project.logoId=await putImage(await fileToPng(f,500));save();render()}catch(x){toast('อ่านโลโก้ไม่ได้')}return}
   if(t.id==='bkin'){const f=t.files[0];t.value='';if(!f)return;try{const j=JSON.parse(await f.text());if(!j.crews)throw new Error('ไม่ใช่ไฟล์สำรองของ Work Desk');
       S.project=Object.assign(S.project,j.project||{});for(const c in COLL)S[c]=(j[c]||[]);tagAll();for(const c in COLL)S[c].forEach(o=>DIRTY.add(keyOf(COLL[c],o.id)));save();toast('กู้คืนข้อมูลแล้ว');render()}catch(x){toast('กู้คืนไม่สำเร็จ: '+(x.message||x),4500)}return}
   if(d.c&&t.matches('select,input[type=checkbox]')){const c=by('crews',UI.crew);const v=t.type==='checkbox'?t.checked:t.value;
