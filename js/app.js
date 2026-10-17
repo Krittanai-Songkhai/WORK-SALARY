@@ -86,7 +86,7 @@ const ACT={
   bxls(){exportBuildingXlsx(UI.b)},
   newboq(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:'',name:'',unit:'',qty:0,rate:0,note:''});render()},
   delboq(el){armBtn(el,'ลบ?',()=>{del('boq',el.dataset.id);render()})},
-  impboq(){importDialog('boq',UI.b||S.project.buildings[0])},
+  impboq(){importBoqAll(UI.b||S.project.buildings[0])},
   impRooms(){importDialog('rooms',UI.b||S.project.buildings[0])},
   newroom(){const b=UI.b||S.project.buildings[0];const last=S.rooms.filter(r=>r.building===b).slice(-1)[0];add('rooms',{building:b,floor:last?last.floor:'1',name:'',qty:{}});render()},
   newitem(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:'งานกระเบื้อง',name:'ITEM ใหม่',unit:'ตร.ม.',qty:0,rate:0,note:'',tile:true});render()},

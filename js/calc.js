@@ -1,15 +1,17 @@
 /* ===== คำนวณ: รายการงานของชุด, ปริมาณสะสม, ยอดเงิน, คุมงบเทียบ BOQ ===== */
 const subsOf=c=>S.subs.filter(s=>s.crewId===c.id).sort((a,b)=>a.no-b.no);
 const roomsOf=c=>(c.roomIds||[]).map(id=>by('rooms',id)).filter(Boolean).sort((a,b)=>natCmp(a.floor,b.floor)||natCmp(a.name,b.name));
+/* รายการนี้มี BOQ คลุมหรือไม่: ถ้านำเข้าพร้อมคอลัมน์ BOQ ให้ดูค่า BOQ ไม่งั้นดูว่ามีปริมาณ */
+const itemCovered=it=>!!it&&(it.bqMapped?num(it.bq)>0:num(it.qty)>0);
 const crewItemIds=c=>Object.keys(c.rates||{}).filter(id=>by('boq',id));
 /* แถวงานของชุด (โหมดรายการ = lines ของชุด, โหมดห้อง = ห้อง × ITEM ที่ชุดนั้นทำ) */
 function crewRows(c){
   if(c.mode==='room'){
     const items=crewItemIds(c).map(id=>by('boq',id)).sort((a,b)=>natCmp(a.name,b.name));const rows=[];
-    for(const r of roomsOf(c))for(const it of items){const q=num((r.qty||{})[it.id]);if(q>0)rows.push({key:r.id+'~'+it.id,floor:r.floor||'',room:r.name,roomId:r.id,name:it.name,boqId:it.id,unit:it.unit||'ตร.ม.',qty:q,rate:num(c.rates[it.id]),note:'',boq:true})}
+    for(const r of roomsOf(c))for(const it of items){const q=num((r.qty||{})[it.id]);if(q>0)rows.push({key:r.id+'~'+it.id,floor:r.floor||'',room:r.name,roomId:r.id,name:it.name,boqId:it.id,unit:it.unit||'ตร.ม.',qty:q,rate:num(c.rates[it.id]),note:'',boq:itemCovered(it)})}
     return rows;
   }
-  return(c.lines||[]).map(l=>({key:l.id,floor:l.floor||'',room:'',name:l.name,boqId:l.boqId||'',unit:l.unit,qty:num(l.qty),rate:num(l.rate),note:l.note||'',boq:!!(l.boqId&&by('boq',l.boqId))}));
+  return(c.lines||[]).map(l=>({key:l.id,floor:l.floor||'',room:'',name:l.name,boqId:l.boqId||'',unit:l.unit,qty:num(l.qty),rate:num(l.rate),note:l.note||'',boq:itemCovered(l.boqId&&by('boq',l.boqId))}));
 }
 /* คำนวณงวด no (ไม่ระบุ = งวดล่าสุด) */
 function calcCrew(c,no){
@@ -27,6 +29,8 @@ const crewTotal=c=>calcCrew(c).T;
 function boqControl(b){
   const items=S.boq.filter(x=>!b||x.building===b);
   const crews=S.crews.filter(c=>!b||c.building===b);
+  const bkey=it=>num(it.bq)>0&&num(it.cap)>0?[it.building,it.group||'',it.unit||'',num(it.bq)].join('|'):'';
+  const capSums={};items.forEach(it=>{const k=bkey(it);if(k)capSums[k]=(capSums[k]||0)+num(it.qty)});
   return items.map(it=>{
     let alloc=0,done=0,amt=0;
     for(const c of crews){
@@ -36,7 +40,8 @@ function boqControl(b){
     }
     const roomTotal=S.rooms.filter(r=>r.building===it.building).reduce((a,r)=>a+num((r.qty||{})[it.id]),0);
     const q=num(it.qty);
-    return{it,qty:q,alloc,remain:q-alloc,done,amt,roomTotal,over:alloc>q+1e-9&&q>0,noBoq:!q}
+    const cap=num(it.cap);const k=bkey(it);const capSum=k?capSums[k]:q;const shared=k&&items.filter(x=>bkey(x)===k).length>1;
+    return{it,qty:q,alloc,remain:q-alloc,done,amt,roomTotal,over:alloc>q+1e-9&&q>0,cap,capSum,shared,capOver:cap>0&&capSum>cap+1e-9,noBoq:!itemCovered(it)}
   });
 }
 const unlinkedCount=()=>S.crews.reduce((a,c)=>a+(c.skip?0:crewRows(c).filter(r=>!r.boq).length),0);
