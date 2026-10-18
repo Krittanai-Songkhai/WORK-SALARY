@@ -113,6 +113,70 @@ function parseBoqSheet(A,m){
     out.push(t)}
   return out;
 }
+
+/* ===== รูปแบบ BOQ แบบ “ตารางแสดงรายการก่อสร้าง + Payment” (1 ชีต/อาคาร: หมวดงาน → งาน → รายชั้น → รายห้อง) ===== */
+const tx=v=>String(v==null?'':v).trim();
+function isKmitSheet(A){
+  const head=A.slice(0,15).map(r=>r.map(tx).join('|'));
+  return head.some(t=>/ปริมาณรวม/.test(t))&&head.some(t=>/Payment|ตำแหน่งงาน/i.test(t));
+}
+function parseKmit(A,sheetName){
+  let hr=-1;for(let i=0;i<15;i++)if(A[i]&&A[i].some(x=>/ปริมาณรวม/.test(tx(x)))){hr=i;break}
+  if(hr<0)return{items:[],rooms:[],building:'',category:''};
+  const H=A[hr];const ix=re=>H.findIndex(x=>re.test(tx(x)));
+  const C={no:ix(/ลำดับ/),item:ix(/รายการ/),loc:ix(/ตำแหน่ง/),unit:ix(/^หน่วย$/),qty:ix(/ปริมาณรวม/),rate:ix(/ราคาค่าแรง/)};
+  C.sub=C.item+1;if(C.unit<0)C.unit=C.loc+1;
+  // อาคาร/หมวดงานจากข้อความหัวกระดาษ
+  let building='',category='';
+  for(let i=0;i<Math.min(A.length,30);i++){const t=A[i].map(tx).filter(Boolean).join(' ');const m=/หมวดงาน\s*(.*?)\s*อาคาร\s*([A-Za-z0-9&]+)/.exec(t);if(m){category=m[1].trim();building=guessBuilding(m[2])||m[2];break}}
+  if(!building)building=guessBuilding(sheetName)||'';
+  const looksCode=v=>/^[A-Za-z]{1,4}\d*$/.test(v)||/^[A-Za-z]\d+$/.test(v);
+  const summary={};const items=[],rooms=[],warn=[];let cur=null,line=null,inSummary=true;
+  const get=(r,c)=>c>=0?tx(r[c]):'';
+  for(let i=hr+1;i<A.length;i++){
+    const r=A[i];if(!r||!r.some(x=>tx(x)!==''))continue;
+    const no=get(r,C.no),a=get(r,C.item),b=get(r,C.sub),unit=get(r,C.unit),q=r[C.qty];
+    if(/รวมราคา/.test(b+a)){inSummary=false;continue}
+    if(/^รวม$/.test(b)||/^รวม$/.test(a)){continue}
+    const isNo=/^\d+$/.test(no);
+    if(isNo){ // หัวงาน
+      if(unit&&/เหมา/.test(unit)){summary[no]={code:a,name:b,lump:num(r[C.rate+1])};continue}
+      if(unit)continue;
+      const sm=summary[no];let name=a,code='';const isRef=!a||/^#|REF/i.test(a);
+      if(isRef||looksCode(name)){name=sm?sm.name:(b||'')}
+      if(sm)code=sm.code;else if(looksCode(a)){code=a;name=b}
+      name=name.replace(/^[-–\s]+/,'');if(!name||/^#/.test(name))name=`งานลำดับที่ ${no}`;
+      const spec=get(r,C.loc);const tag=isRef?' [#REF!]':'';const ex=items.find(z=>z.no===no&&z.spec===spec&&z.tag===tag);
+      if(isRef&&!warn.includes(no))warn.push(no);
+      if(ex){cur=ex}else{cur={no,code,name,spec,tag,group:code?`${name} (${code})`:name,lines:[]};items.push(cur)}line=null;continue}
+    if(!cur)continue;
+    const isQ=isNum(q)&&num(q)>0;
+    if(/^\s*[-–]/.test(tx(r[C.sub]||''))&&r[C.sub]!==''){ // บรรทัดรายชั้น/ส่วนงาน
+      const label=tx(r[C.sub]).replace(/^[-–\s]+/,'');
+      line={label,loc:get(r,C.loc),unit:unit||'ตร.ม.',qty:isQ?num(q):0,rate:C.rate>=0?num(r[C.rate]):0,add:/^ADD$/i.test(no),rooms:[]};cur.lines.push(line);continue}
+    if(line&&isQ&&b!==''&&(/^\d+[A-Za-z]?$/.test(b)||isNum(b))){ // ห้อง
+      line.rooms.push({name:b,type:get(r,C.loc),qty:num(q),unit:unit||line.unit})}
+  }
+  const out=[];const roomMap=new Map();
+  const floorOf=l=>{const m=/ชั้น\s*([^\s]+)/.exec(l.label);return m?m[1]:''};
+  for(const it of items){
+    const hasRooms=it.lines.some(l=>l.rooms.length);
+    if(hasRooms){ // ITEM แบบตารางห้อง: 1 รายการ BOQ + ห้อง
+      const tot=it.lines.reduce((a,l)=>a+l.qty,0);const rates=it.lines.map(l=>l.rate).filter(x=>x>0);
+      const key=it.name+(it.spec?` ${it.spec}`:'')+(it.tag||'');
+      out.push({name:key,loc:it.spec,unit:it.lines[0].unit,qty:+tot.toFixed(3),rate:rates[0]||0,bqMapped:true,bq:+tot.toFixed(3),group:it.group,tile:true,note:''});
+      for(const l of it.lines){const fl=floorOf(l)||l.label;
+        if(l.rooms.length)l.rooms.forEach(rm=>{const k=fl+'|'+rm.name;let ro=roomMap.get(k);if(!ro){ro={floor:fl,name:rm.type?`${rm.name} ${rm.type}`:rm.name,qtys:{}};roomMap.set(k,ro)}ro.qtys[key]=(ro.qtys[key]||0)+rm.qty});
+        else if(l.qty>0){const k=fl+'|all:'+l.label;let ro=roomMap.get(k);if(!ro){ro={floor:fl,name:`${l.label}${l.loc?' ('+l.loc+')':''} (ทั้งชั้น)`,qtys:{}};roomMap.set(k,ro)}ro.qtys[key]=(ro.qtys[key]||0)+l.qty}}
+    }else{
+      for(const l of it.lines){if(!(l.qty>0))continue;
+        out.push({name:`${it.name}${it.tag||''} ${l.label}${l.loc?` (${l.loc})`:''}`.replace(/\s+/g,' '),loc:l.loc,unit:l.unit,qty:l.qty,rate:l.rate,bqMapped:true,bq:l.qty,group:it.group,note:l.add?'ADD (งานเพิ่ม)':''})}
+    }
+  }
+  roomMap.forEach(ro=>rooms.push(ro));
+  return{items:out,rooms,building,category,warn};
+}
+const itemsOf=x=>x.fmt==='kmit'?x.parsed.items:itemsOf(x);
 function importBoqAll(building){
   if(!window.XLSX){toast('ยังโหลดตัวอ่าน Excel ไม่ได้ (ต้องมีอินเทอร์เน็ตครั้งแรก)',4000);return}
   const o=overlay(`<div class="box wide"><div class="row" style="margin-bottom:8px"><h3 style="margin-right:auto">นำเข้า BOQ จาก Excel (หลายชีต = หลายอาคาร)</h3><button class="btn" data-x="close">ปิด</button></div>
@@ -123,24 +187,27 @@ function importBoqAll(building){
   const FL=[['no','รหัสหัวข้อ'],['name','รายการ'],['loc','ตำแหน่ง/ชนิด'],['unit','หน่วย'],['qty','ปริมาณ'],['rate','ค่าแรง/หน่วย'],['bq','BOQ'],['cap','80% BOQ']];
   const draw=()=>{
     const s=sh[cur];const W=Math.max(0,...s.A.slice(0,60).map(r=>r.length));const opts=v=>`<option value="-1">— ไม่ใช้ —</option>${Array.from({length:W},(_,i)=>`<option value="${i}" ${v===i?'selected':''}>${colL(i)}</option>`).join('')}`;
-    const items=parseBoqSheet(s.A,s.m);
-    $('#ibbody',o).innerHTML=`<div class="tblwrap"><table class="grid-t"><thead><tr><th>นำเข้า</th><th>ชีต</th><th>อาคาร</th><th class="r">รายการ</th></tr></thead><tbody>${wb.SheetNames.map(n=>{const x=sh[n];const cnt=parseBoqSheet(x.A,x.m).length;return`<tr data-sh="${esc(n)}" class="${n===cur?'hd':''}" style="cursor:pointer"><td><input type="checkbox" data-use="${esc(n)}" ${x.use?'checked':''}></td><td>${esc(n)}</td><td><select data-bld="${esc(n)}"><option value="">— ข้าม —</option>${S.project.buildings.map(b=>`<option ${b===x.b?'selected':''}>${esc(b)}</option>`).join('')}</select></td><td class="r">${cnt}</td></tr>`}).join('')}</tbody></table></div>
-     <div class="small muted" style="margin:6px 0">คอลัมน์ของชีต “${esc(cur)}” (ใช้กับชีตนี้):</div>
-     <div class="grid" style="margin-bottom:8px">${FL.map(f=>`<label class="f">${f[1]}<select data-mc="${f[0]}">${opts(s.m[f[0]])}</select></label>`).join('')}</div>
+    const items=itemsOf(s);
+    $('#ibbody',o).innerHTML=`<div class="tblwrap"><table class="grid-t"><thead><tr><th>นำเข้า</th><th>ชีต</th><th>อาคาร</th><th class="r">รายการ</th></tr></thead><tbody>${wb.SheetNames.map(n=>{const x=sh[n];const cnt=itemsOf(x).length;return`<tr data-sh="${esc(n)}" class="${n===cur?'hd':''}" style="cursor:pointer"><td><input type="checkbox" data-use="${esc(n)}" ${x.use?'checked':''}></td><td>${esc(n)}</td><td><select data-bld="${esc(n)}"><option value="">— ข้าม —</option>${S.project.buildings.map(b=>`<option ${b===x.b?'selected':''}>${esc(b)}</option>`).join('')}</select></td><td class="r">${cnt}</td></tr>`}).join('')}</tbody></table></div>
+     ${s.fmt==='kmit'?`<div class="hint" style="margin:6px 0">ตรวจพบรูปแบบ “ตารางแสดงรายการก่อสร้าง” — แยกให้อัตโนมัติ: อาคาร <b>${esc(s.parsed.building||'?')}</b> · แต่ละงานเป็น 1 หมวดงาน · รายการรายชั้น/ส่วนงานเป็นรายการ BOQ (ค่าแรง/หน่วยจากคอลัมน์ราคาค่าแรง) · งานที่มีรายห้อง (เช่น กระเบื้องห้องน้ำ) เป็น ITEM + เพิ่มห้องในตารางห้อง ${s.parsed.rooms.length} ห้อง · ยังไม่นำเข้า % เบิก/Payment${s.parsed.warn.length?`<br><b class="warnt">⚠ ชื่องานลำดับที่ ${s.parsed.warn.join(', ')} ในไฟล์เป็น #REF! (สูตรเสีย) — ระบบใส่ชื่อตามลำดับในตารางสรุปและติดป้าย [#REF!] ให้ ตรวจชื่อ/ปริมาณที่หน้า BOQ หลังนำเข้า</b>`:''}</div>`:`<div class="small muted" style="margin:6px 0">คอลัมน์ของชีต “${esc(cur)}” (ใช้กับชีตนี้):</div>
+     <div class="grid" style="margin-bottom:8px">${FL.map(f=>`<label class="f">${f[1]}<select data-mc="${f[0]}">${opts(s.m[f[0]])}</select></label>`).join('')}</div>`}
      <div class="tblwrap" style="max-height:260px;overflow:auto"><table class="grid-t"><thead><tr><th>หมวด</th><th>รายการ</th><th>หน่วย</th><th class="r">ปริมาณ</th><th class="r">ค่าแรง</th><th class="r">BOQ</th><th class="r">80%</th></tr></thead><tbody>${items.slice(0,40).map(t=>`<tr><td class="small muted">${esc(t.group)}</td><td>${esc(t.name)}</td><td>${esc(t.unit)}</td><td class="r mono">${fq(t.qty)}</td><td class="r mono">${f2(t.rate)}</td><td class="r mono">${t.bqMapped?(t.bq?fq(t.bq):'<span class="chip warn">ไม่มี</span>'):'-'}</td><td class="r mono">${t.cap?fq(t.cap):'-'}</td></tr>`).join('')||'<tr><td colspan="7" class="empty small">ไม่พบรายการ — ลองเลือกคอลัมน์ รายการ/หน่วย/ปริมาณ</td></tr>'}</tbody></table></div>
      <div class="row" style="margin-top:10px"><label class="row small" style="gap:6px">วิธีนำเข้า<select id="ibm" style="width:auto"><option value="add">เพิ่ม / อัปเดตรายการที่หมวด+ชื่อตรงกัน</option><option value="replace">แทนที่ทั้งหมดของอาคารนั้น</option></select></label><button class="btn pri" data-x="go" style="margin-left:auto">นำเข้า</button></div>`;
   };
   o.addEventListener('change',async e=>{const t=e.target;
-    if(t.id==='ibf'){const f=t.files[0];if(!f)return;try{wb=XLSX.read(await f.arrayBuffer(),{type:'array'});wb.SheetNames.forEach(n=>{const A=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''});const m=detectBoqCols(A);const b=guessBuilding(n);sh[n]={A,m,b,use:!!b&&parseBoqSheet(A,m).length>0}});cur=wb.SheetNames.find(n=>sh[n].use)||wb.SheetNames[0];draw()}catch(x){toast('อ่านไฟล์ไม่ได้: '+(x.message||x),4500)}return}
+    if(t.id==='ibf'){const f=t.files[0];if(!f)return;try{wb=XLSX.read(await f.arrayBuffer(),{type:'array'});wb.SheetNames.forEach(n=>{const A=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''});if(isKmitSheet(A)){const parsed=parseKmit(A,n);sh[n]={A,m:{},fmt:'kmit',parsed,b:parsed.building,use:!!parsed.building&&parsed.items.length>0};return}const m=detectBoqCols(A);const b=guessBuilding(n);sh[n]={A,m,b,use:!!b&&parseBoqSheet(A,m).length>0}});cur=wb.SheetNames.find(n=>sh[n].use)||wb.SheetNames[0];draw()}catch(x){toast('อ่านไฟล์ไม่ได้: '+(x.message||x),4500)}return}
     if(t.dataset.use){sh[t.dataset.use].use=t.checked;return}
     if(t.dataset.bld!==undefined){const x=sh[t.dataset.bld];x.b=t.value;x.use=!!t.value;draw();return}
     if(t.dataset.mc){sh[cur].m[t.dataset.mc]=+t.value;draw();return}});
   o.addEventListener('click',e=>{const tr=e.target.closest('tr[data-sh]');if(tr&&!e.target.closest('input,select')){cur=tr.dataset.sh;draw();return}
     const b=e.target.closest('[data-x]');if(!b){if(e.target===o)o.remove();return}if(b.dataset.x==='close'){o.remove();return}
-    const mode=$('#ibm',o).value;let n=0,bl=new Set();
-    for(const name of wb.SheetNames){const x=sh[name];if(!x.use||!x.b)continue;const items=parseBoqSheet(x.A,x.m);
+    const mode=$('#ibm',o).value;let n=0,nr=0,bl=new Set();
+    for(const name of wb.SheetNames){const x=sh[name];if(!x.use||!x.b)continue;const items=itemsOf(x);
       if(mode==='replace'&&!bl.has(x.b)){S.boq.filter(i=>i.building===x.b).forEach(i=>del('boq',i.id))}bl.add(x.b);
-      for(const t of items){const ex=S.boq.find(i=>i.building===x.b&&i.name===t.name&&(i.group||'')===t.group);const v={building:x.b,...t};if(ex){Object.assign(ex,v);save(ex)}else add('boq',Object.assign({note:''},v));n++}}
-    if(n){toast(`นำเข้า ${n} รายการ จาก ${bl.size} อาคารแล้ว`);o.remove();render()}else toast('ไม่มีรายการให้นำเข้า — ตรวจการติ๊กชีต/อาคาร')});
+      for(const t of items){const ex=S.boq.find(i=>i.building===x.b&&i.name===t.name&&(i.group||'')===t.group);const v={building:x.b,...t};if(ex){Object.assign(ex,v);save(ex)}else add('boq',Object.assign({note:''},v));n++}
+      if(x.fmt==='kmit')for(const rm of x.parsed.rooms){
+        let ro=S.rooms.find(r=>r.building===x.b&&(r.floor||'')===rm.floor&&r.name===rm.name);if(!ro)ro=add('rooms',{building:x.b,floor:rm.floor,name:rm.name,qty:{}});ro.qty=ro.qty||{};
+        for(const k in rm.qtys){const it=S.boq.find(i=>i.building===x.b&&i.name===k);if(it)ro.qty[it.id]=+rm.qtys[k].toFixed(3)}save(ro);nr++}}
+    if(n){toast(`นำเข้า ${n} รายการ${nr?` + ${nr} ห้อง`:''} จาก ${bl.size} อาคารแล้ว`,4000);o.remove();render()}else toast('ไม่มีรายการให้นำเข้า — ตรวจการติ๊กชีต/อาคาร')});
 }
 

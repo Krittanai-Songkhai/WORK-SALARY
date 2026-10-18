@@ -65,7 +65,7 @@ const ACT={
     const c=by('crews',UI.crew);const ctl=boqControl(c.building);const have=new Set((c.lines||[]).map(l=>l.boqId));const list=ctl.filter(x=>!have.has(x.it.id));
     if(!list.length){toast('ไม่มีรายการ BOQ ของอาคารนี้ที่ยังไม่ได้เพิ่ม');return}
     const o=overlay(`<div class="box wide"><div class="row" style="margin-bottom:8px"><h3 style="margin-right:auto">เลือกรายการจาก BOQ อาคาร ${esc(c.building)}</h3><button class="btn" data-x="close">ปิด</button></div><p class="hint">ปริมาณที่ใส่ให้ = ส่วนที่ยังเหลือยังไม่ได้จัดสรรให้ชุดอื่น (แก้ได้ภายหลัง)</p>
-     ${list.map(x=>`<label class="pickrow"><input type="checkbox" value="${x.it.id}"><span style="flex:1">${esc((x.it.group?x.it.group+' · ':'')+x.it.name)}</span><span class="small muted">BOQ ${fq(x.qty)} ${esc(x.it.unit||'')} · เหลือ ${fq(x.remain)}</span></label>`).join('')}
+     ${[...new Set(list.map(x=>x.it.group||NOGRP))].map(g=>`<div class="pickgrp">${esc(g)}</div>`+list.filter(x=>(x.it.group||NOGRP)===g).map(x=>`<label class="pickrow"><input type="checkbox" value="${x.it.id}"><span style="flex:1">${esc(x.it.name)}</span><span class="small muted">BOQ ${fq(x.qty)} ${esc(x.it.unit||'')} · เหลือ ${fq(x.remain)}</span></label>`).join('')).join('')}
      <div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn pri" data-x="ok">เพิ่มที่เลือก</button></div></div>`,'modal');
     o.addEventListener('click',e=>{const b=e.target.closest('[data-x]');if(!b){if(e.target===o)o.remove();return}
       if(b.dataset.x==='close'){o.remove();return}
@@ -85,7 +85,15 @@ const ACT={
     const v=p===100?Math.max(0,r.qty-r.prev):r.qty*p/100;setSubEntry(s,r.key,+v.toFixed(4));render()},
   async bpdf(){await ensureData([S.project.logoId],true);const pg=buildingPages(UI.b,UI.kind);previewDoc(pg,'สรุปส่งงาน_'+(UI.b||'ทุกอาคาร'))},
   bxls(){exportBuildingXlsx(UI.b,UI.kind)},
-  newboq(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:'',name:'',unit:'',qty:0,rate:0,note:''});render()},
+  newboq(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:UI.bg&&UI.bg!==NOGRP?UI.bg:'',name:'',unit:'',qty:0,rate:0,note:''});render()},
+  newboqg(el){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:el.dataset.g,name:'',unit:'',qty:0,rate:0,note:''});UI.bcol.delete(el.dataset.g||NOGRP);render()},
+  newgrp(){const g=(prompt('ชื่อหมวดงานใหม่ (เช่น งานกระเบื้อง, งานสี, งานฝ้า)')||'').trim();if(!g)return;const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:g,name:'',unit:'',qty:0,rate:0,note:''});UI.bg='';render()},
+  rengrp(el){const g=el.dataset.g;const n=(prompt('เปลี่ยนชื่อหมวด',g)||'').trim();if(!n||n===g)return;const b=UI.b||S.project.buildings[0];S.boq.filter(x=>x.building===b&&(x.group||'')===g).forEach(x=>{x.group=n;save(x)});if(UI.bg===g)UI.bg=n;render()},
+  setb(el){UI.b=el.dataset.v;UI.bg='';UI.bq='';render()},
+  bgrp(el){UI.bg=el.dataset.g;render()},
+  togg(el){const g=el.dataset.g;UI.bcol.has(g)?UI.bcol.delete(g):UI.bcol.add(g);render()},
+  expall(){UI.bcol.clear();render()},
+  collall(){S.boq.filter(x=>x.building===(UI.b||S.project.buildings[0])).forEach(x=>UI.bcol.add(x.group||NOGRP));render()},
   delboq(el){armBtn(el,'ลบ?',()=>{del('boq',el.dataset.id);render()})},
   impboq(){importBoqAll(UI.b||S.project.buildings[0])},
   impRooms(){importDialog('rooms',UI.b||S.project.buildings[0])},
@@ -155,6 +163,8 @@ document.addEventListener('input',e=>{
   if(d.e!==undefined){const s=curSub();setSubEntry(s,d.e,t.value);refreshSub();return}
   if(d.pe!==undefined){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===d.pe);if(r){setSubEntry(s,r.key,t.value===''?0:+(r.qty*num(t.value)/100).toFixed(4));refreshSub()}return}
   if(d.s){const s=curSub();setField(s,d.s,t.value);return}
+  if(d.bg){const o=by('boq',d.bg);o.group=t.value.trim();save(o);return}
+  if(t.id==='bsearch'){UI.bq=t.value;const p=t.selectionStart;render();const n=$('#bsearch');if(n){n.focus();n.setSelectionRange(p,p)}return}
   if(d.b){const[id,f]=d.b.split(':');const o=by('boq',id);o[f]=(f==='qty'||f==='rate')?num(t.value):t.value;save(o);return}
   if(d.rm2){const[id,f]=d.rm2.split(':');setField(by('rooms',id),f,t.value);return}
   if(d.r){const[id,iid]=d.r.split(':');const r=by('rooms',id);r.qty=r.qty||{};const n=num(t.value);if(n)r.qty[iid]=n;else delete r.qty[iid];save(r);

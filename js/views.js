@@ -46,7 +46,7 @@ function viewCrew(){
     <div class="grid" style="grid-template-columns:1fr 1fr 1fr"><label class="f">อาคาร<select data-c="building">${bOpts(c.building)}</select></label><label class="f">ประเภท<select data-c="kind">${kindOpts(c.kind)}</select></label><label class="f">รูปแบบเอกสาร<select data-c="mode"><option value="line" ${c.mode==='line'?'selected':''}>รายการงาน (แบบเบิกผลงาน)</option><option value="room" ${c.mode==='room'?'selected':''}>ตารางห้อง (ตร.ม./ITEM)</option></select></label></div>
     <label class="f">รายละเอียดงาน<textarea data-c="detail" rows="2">${esc(c.detail||'')}</textarea></label>
     <div class="grid"><label class="f">หมายเหตุ<input type="text" data-c="note" value="${esc(c.note||'')}"></label><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin-top:18px"><input type="checkbox" data-c="skip" ${c.skip?'checked':''}> ไม่ส่งงานงวดนี้ / ยังไม่ใช้งาน</label></div></div></div>`;
-  h+=c.mode==='room'?crewRoomPanel(c,bo)+crewLinePanel(c,k,bo,true):crewLinePanel(c,k,bo);
+  h+=c.mode==='room'?crewRoomPanel(c,bo,crewLinePanel(c,k,bo,true)):crewLinePanel(c,k,bo);
   h+=`<div class="panel"><h3>งวดส่งงาน / เบิกผลงาน <button class="btn pri sm" data-act="newsub" style="margin-left:auto">＋ เริ่มงวดใหม่ (งวดที่ ${nextNo(c)})</button></h3>
    ${subs.length?`<div class="tblwrap"><table class="grid-t"><thead><tr><th>งวด</th><th>ช่วงเวลา</th><th class="r">เบิกงวดนี้ (บาท)</th><th class="r">สะสม (บาท)</th><th>%</th><th>สถานะ</th><th></th></tr></thead><tbody>
     ${subs.map(s=>{const kk=calcCrew(c,s.no);return`<tr><td><b>${s.no}</b></td><td class="small">${esc([s.from&&fmtShort(s.from),s.to&&fmtShort(s.to)].filter(Boolean).join(' – ')||fmtShort(s.date))}</td><td class="r mono">${f2(kk.T.curAmt)}</td><td class="r mono">${f2(kk.T.cumAmt)}</td><td class="small">${pct(kk.T.pct)}</td><td>${s.sent?'<span class="chip good">ส่งแล้ว</span>':'<span class="chip">ร่าง</span>'}</td>
@@ -54,7 +54,7 @@ function viewCrew(){
   return h;
 }
 function crewLinePanel(c,k,bo,extra){
-  const boOpt=sel=>`<option value="">— ไม่มี BOQ —</option>${bo.map(b=>`<option value="${b.id}" ${b.id===sel?'selected':''}>${esc((b.group?b.group+' · ':'')+b.name)}</option>`).join('')}`;
+  const boOpt=sel=>{const gs=[...new Set(bo.map(b=>b.group||NOGRP))];return`<option value="">— ไม่มี BOQ —</option>${gs.map(g=>`<optgroup label="${esc(g)}">${bo.filter(b=>(b.group||NOGRP)===g).map(b=>`<option value="${b.id}" ${b.id===sel?'selected':''}>${esc(b.name)}</option>`).join('')}</optgroup>`).join('')}`};
   const cr=Object.fromEntries(boqControl(c.building).map(x=>[x.it.id,x]));
   return`<div class="panel"><h3>${extra?'รายการอื่นๆ นอกตารางห้อง':'รายการงาน / ราคาจัดจ้างของชุด'} <span class="small muted" style="font-weight:400">${extra?'(เช่น ปูกระเบื้องทางเดินชั้น 1 — เบิกรวมกับตารางห้อง)':'(ปริมาณ × ค่าแรง/หน่วย = มูลค่าสัญญา)'}</span><span style="margin-left:auto" class="row"><button class="btn sm" data-act="fromboq">＋ เพิ่มจาก BOQ</button><button class="btn sm" data-act="newline">＋ เพิ่มรายการ</button></span></h3>
    <div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="width:70px">ชั้น</th><th>รายการ</th><th style="width:90px">ปริมาณ</th><th style="width:70px">หน่วย</th><th style="width:100px">ค่าแรง/หน่วย</th><th class="r" style="width:110px">บาท</th><th style="width:200px">BOQ ที่คลุม</th><th style="width:170px">หมายเหตุ</th><th></th></tr></thead><tbody>
@@ -62,16 +62,17 @@ function crewLinePanel(c,k,bo,extra){
     <td class="r mono" data-amt="${l.id}">${f2(num(l.qty)*num(l.rate))}</td><td><select data-l="${l.id}:boqId">${boOpt(l.boqId)}</select>${warn?`<div class="small" style="color:var(--warn)">${warn}</div>`:''}</td><td><input type="text" data-l="${l.id}:note" value="${esc(l.note||'')}" placeholder="หมายเหตุเพิ่มเติม">${b&&!b.noBoq?'':`<select data-l="${l.id}:nb"><option value="nobq" ${(l.nb||'nobq')==='nobq'?'selected':''}>ไม่มี BOQ คลุม</option><option value="extra" ${l.nb==='extra'?'selected':''}>งานเพิ่ม</option><option value="none" ${l.nb==='none'?'selected':''}>ไม่ใส่หมายเหตุ</option></select>`}</td><td><button class="btn sm bad" data-act="delline" data-id="${l.id}">ลบ</button></td></tr>`}).join('')||`<tr><td colspan="9" class="empty small">ยังไม่มีรายการ</td></tr>`}
    </tbody><tfoot><tr><td colspan="5" class="r"><b>รวมมูลค่าสัญญา</b></td><td class="r mono" id="lntot"><b>${f2(k.T.amt)}</b></td><td colspan="3"></td></tr></tfoot></table></div></div>`;
 }
-function crewRoomPanel(c,bo){
+function crewRoomPanel(c,bo,extraPanel){
   const ctl=Object.fromEntries(boqControl(c.building).map(x=>[x.it.id,x]));
   const rooms=S.rooms.filter(r=>r.building===c.building).sort((a,b)=>natCmp(a.floor,b.floor)||natCmp(a.name,b.name));
   const other=(id,itId)=>{for(const x of S.crews){if(x.id!==c.id&&x.mode==='room'&&x.rates&&x.rates[itId]!==undefined&&(x.roomIds||[]).includes(id))return x.name}return''};
   const its=bo.filter(b=>b.tile||(c.rates&&c.rates[b.id]!==undefined)||S.rooms.some(r=>(r.qty||{})[b.id]));
   const floors=[...new Set(rooms.map(r=>r.floor||''))];
-  return`<div class="panel"><h3>ITEM และค่าแรงของชุด <span class="small muted" style="font-weight:400">ติ๊กเฉพาะ ITEM ที่ชุดนี้ทำ แล้วใส่ค่าแรง/ตร.ม.</span></h3>
+  return`<div class="panel"><h3>ITEM และค่าแรงของชุด <span class="small muted" style="font-weight:400">ติ๊กเฉพาะ ITEM ที่ชุดนี้ทำ แล้วใส่ค่าแรง/ตร.ม.</span><button class="btn sm pri" data-act="newline" style="margin-left:auto">＋ เพิ่มรายการอื่นๆ (นอกตารางห้อง)</button></h3>
    ${its.length?`<div class="tblwrap"><table class="grid-t"><thead><tr><th>ใช้</th><th>ITEM</th><th>หน่วย</th><th class="r">BOQ</th><th class="r">จัดสรรแล้ว (ทุกชุด)</th><th style="width:130px">ค่าแรง/หน่วย</th></tr></thead><tbody>
     ${its.map(b=>{const on=c.rates&&c.rates[b.id]!==undefined;const x=ctl[b.id];return`<tr><td><input type="checkbox" data-ri="${b.id}" ${on?'checked':''}></td><td>${esc(b.name)}</td><td>${esc(b.unit)}</td><td class="r mono">${x&&x.qty?fq(x.qty):'<span class="chip warn">ไม่มี BOQ</span>'}</td><td class="r mono ${x&&x.over?'bad':''}">${x?fq(x.alloc):0}</td><td>${on?`<input type="number" step="any" data-rate="${b.id}" value="${c.rates[b.id]}">`:''}</td></tr>`}).join('')}</tbody></table></div>`
     :'<div class="empty small">ยังไม่มี ITEM กระเบื้องของอาคารนี้ — ไปแท็บ “ตารางห้อง” เพื่อนำเข้า/เพิ่มห้องและ ITEM</div>'}</div>
+   ${extraPanel||''}
    <div class="panel"><h3>ห้องที่ชุดนี้รับผิดชอบ <span class="chip">${(c.roomIds||[]).length} ห้อง</span><span style="margin-left:auto" class="row"><button class="btn sm" data-act="roomsall">เลือกทุกห้อง</button><button class="btn sm" data-act="roomsnone">ล้าง</button></span></h3>
    ${rooms.length?floors.map(f=>{const rs=rooms.filter(r=>(r.floor||'')===f);const allOn=rs.every(r=>(c.roomIds||[]).includes(r.id));return`<div class="ghead l1"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-rf="${esc(f)}" ${allOn?'checked':''}> <b>ชั้น ${esc(f||'-')}</b></label><span class="small muted">${rs.length} ห้อง</span></div>
     <div class="roomgrid">${rs.map(r=>{const on=(c.roomIds||[]).includes(r.id);const oth=crewItemIds(c).map(i=>other(r.id,i)).find(Boolean);return`<label class="rchip ${on?'on':''}"><input type="checkbox" data-rm="${r.id}" ${on?'checked':''}> <span>${esc(r.name)}</span>${oth?`<small class="warnt">ชุดอื่นรับแล้ว: ${esc(oth)}</small>`:''}</label>`}).join('')}</div>`}).join(''):'<div class="empty small">ยังไม่มีห้องของอาคารนี้</div>'}</div>`;
@@ -113,14 +114,35 @@ function subAttach(s){
 const subStats=k=>`<div><b class="mono">${f2(k.T.amt)}</b><span>มูลค่าสัญญา</span></div><div><b class="mono">${f2(k.T.prevAmt)}</b><span>เบิกก่อนหน้า</span></div><div><b class="mono" style="color:var(--accent)">${f2(k.T.curAmt)}</b><span>เบิกงวดนี้ (${pct(k.T.curPct)})</span></div><div><b class="mono" style="color:var(--good)">${f2(k.T.cumAmt)}</b><span>สะสม (${pct(k.T.pct)})</span></div>`;
 
 /* ---- BOQ ---- */
+const NOGRP='(ไม่ระบุหมวด)';
+UI.bg='';UI.bcol=new Set();UI.bq='';
 function viewBoq(){
-  const b=UI.b||S.project.buildings[0];const cs=boqControl(b).sort((a,z)=>natCmp(a.it.group,z.it.group)||natCmp(a.it.name,z.it.name));
-  let h=`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto">BOQ ปริมาณงาน</h1><select id="fb" style="width:auto">${bOpts(b)}</select><button class="btn" data-act="impboq">นำเข้า Excel</button><button class="btn pri" data-act="newboq">＋ เพิ่มรายการ</button></div>
-   <p class="hint">ใช้คุมงบ: ปริมาณ BOQ เทียบกับที่จัดสรรให้ชุดต่างๆ รายการที่ชุดช่างทำแต่ไม่มี BOQ คลุมจะถูกหมายเหตุในเอกสารให้อัตโนมัติ</p>
-   <div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="width:120px">หมวด/ชั้น</th><th>รายการ</th><th style="width:70px">หน่วย</th><th style="width:100px">ปริมาณงาน</th><th style="width:90px">ค่าแรง/หน่วย</th><th style="width:90px">BOQ</th><th style="width:90px">80% BOQ</th><th class="r">จัดสรรให้ชุด</th><th class="r">คงเหลือ</th><th class="r">ปริมาณห้องรวม</th><th class="r">เบิกสะสม (ปริมาณ)</th><th style="width:150px">หมายเหตุ</th><th></th></tr></thead><tbody>
-   ${cs.map(x=>{const t=x.it;return`<tr class="${x.over||x.capOver?'overr':''}"><td><input type="text" data-b="${t.id}:group" value="${esc(t.group||'')}"></td><td><input type="text" data-b="${t.id}:name" value="${esc(t.name)}"></td><td><input type="text" data-b="${t.id}:unit" value="${esc(t.unit||'')}"></td><td><input type="number" step="any" data-b="${t.id}:qty" value="${t.qty||''}"></td><td><input type="number" step="any" data-b="${t.id}:rate" value="${t.rate||''}"></td><td><input type="number" step="any" data-b="${t.id}:bq" value="${t.bq||''}"></td><td><input type="number" step="any" data-b="${t.id}:cap" value="${t.cap||''}" ></td>
-    <td class="r mono">${fq(x.alloc)}</td><td class="r mono ${x.remain<0?'bad':''}">${x.qty?fq(x.remain):'-'}</td><td class="r mono ${x.roomTotal&&x.qty&&Math.abs(x.roomTotal-x.qty)>.5?'warnt':''}">${x.roomTotal?fq(x.roomTotal):'-'}</td><td class="r mono">${fq(x.done)}</td><td><input type="text" data-b="${t.id}:note" value="${esc(t.note||'')}">${x.over?'<div class="small bad">จัดสรรเกิน BOQ</div>':''}${x.noBoq?'<div class="small warnt">ไม่มี BOQ คลุม</div>':''}${x.capOver?`<div class="small bad">เกิน 80% BOQ${x.shared?` (รวมรายการที่ใช้ BOQ เดียวกัน ${fq(x.capSum)} / ${fq(x.cap)})`:''}</div>`:''}</td><td><button class="btn sm bad" data-act="delboq" data-id="${t.id}">ลบ</button></td></tr>`}).join('')||'<tr><td colspan="13" class="empty small">ยังไม่มีรายการ BOQ ของอาคารนี้ — นำเข้าจาก Excel หรือเพิ่มเอง</td></tr>'}</tbody></table></div>`;
-  return h;
+  const b=UI.b||S.project.buildings[0];const idx=new Map(S.boq.map((x,i)=>[x.id,i]));
+  let cs=boqControl(b).sort((a,z)=>idx.get(a.it.id)-idx.get(z.it.id));
+  const gname=x=>x.it.group||NOGRP;
+  const groups=[];cs.forEach(x=>{const g=gname(x);if(!groups.includes(g))groups.push(g)});
+  const q=(UI.bq||'').trim().toLowerCase();
+  const view=cs.filter(x=>(!UI.bg||gname(x)===UI.bg)&&(!q||(x.it.name+' '+(x.it.group||'')).toLowerCase().includes(q)));
+  const stat=g=>{const l=cs.filter(x=>gname(x)===g);return{n:l.length,warn:l.filter(x=>x.over||x.capOver).length,nob:l.filter(x=>x.noBoq).length,amt:l.reduce((a,x)=>a+num(x.it.qty)*num(x.it.rate),0)}};
+  const bchips=S.project.buildings.map(x=>`<button class="chipbtn ${x===b?'on':''}" data-act="setb" data-v="${esc(x)}">${esc(x)} <small>${S.boq.filter(i=>i.building===x).length}</small></button>`).join('');
+  const gchips=`<button class="chipbtn ${!UI.bg?'on':''}" data-act="bgrp" data-g="">ทุกหมวด <small>${cs.length}</small></button>`+groups.map(g=>{const st=stat(g);return`<button class="chipbtn ${UI.bg===g?'on':''}" data-act="bgrp" data-g="${esc(g)}">${esc(g)} <small>${st.n}</small>${st.warn?'<i class="dot bad"></i>':''}</button>`}).join('');
+  let h=`<div class="row" style="margin-bottom:8px"><h1 style="font-size:22px;margin-right:auto">BOQ ปริมาณงาน</h1><button class="btn" data-act="impboq">นำเข้า Excel</button><button class="btn" data-act="newgrp">＋ หมวดงาน</button><button class="btn pri" data-act="newboq">＋ เพิ่มรายการ</button></div>
+   <div class="chiprow"><span class="small muted">อาคาร</span>${bchips}</div>
+   <div class="chiprow"><span class="small muted">หมวดงาน</span>${gchips}</div>
+   <div class="row" style="margin:6px 0 10px"><input type="search" id="bsearch" placeholder="ค้นหารายการ / หมวด" value="${esc(UI.bq||'')}" style="max-width:280px"><button class="btn sm" data-act="expall">ขยายทุกหมวด</button><button class="btn sm" data-act="collall">ย่อทุกหมวด</button><span class="small muted" style="margin-left:auto">${cs.length} รายการ · ${groups.length} หมวด</span></div>
+   <datalist id="grplist">${groups.filter(g=>g!==NOGRP).map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+   <p class="hint">แยกตามอาคารและหมวดงาน ใช้คุมงบ: ปริมาณ BOQ เทียบกับที่จัดสรรให้ชุดต่างๆ รายการที่ชุดช่างทำแต่ไม่มี BOQ คลุมจะถูกหมายเหตุในเอกสารให้อัตโนมัติ · เปลี่ยนช่อง “หมวด” ท้ายแถวเพื่อย้ายรายการไปหมวดอื่น</p>
+   <div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="min-width:240px">รายการ</th><th style="width:70px">หน่วย</th><th style="width:100px">ปริมาณงาน</th><th style="width:90px">ค่าแรง/หน่วย</th><th style="width:90px">BOQ</th><th style="width:90px">80% BOQ</th><th class="r">จัดสรรให้ชุด</th><th class="r">คงเหลือ</th><th class="r">ปริมาณห้องรวม</th><th class="r">เบิกสะสม</th><th style="width:150px">หมายเหตุ</th><th style="width:130px">หมวด</th><th></th></tr></thead><tbody>`;
+  const shown=[];view.forEach(x=>{const g=gname(x);if(!shown.includes(g))shown.push(g)});
+  for(const g of shown){
+    const st=stat(g);const col=UI.bcol.has(g)&&!q;
+    h+=`<tr class="band"><td colspan="13"><button class="btn sm" data-act="togg" data-g="${esc(g)}" style="margin-right:8px">${col?'▶':'▼'}</button><b>${esc(g)}</b> <span class="small muted" style="font-weight:400">${st.n} รายการ · มูลค่า ${f2(st.amt)} บาท${st.warn?` · <span class="bad">เกิน ${st.warn}</span>`:''}${st.nob?` · <span class="warnt">ไม่มี BOQ ${st.nob}</span>`:''}</span>
+      <span style="float:right"><button class="btn sm" data-act="newboqg" data-g="${esc(g===NOGRP?'':g)}">＋ รายการ</button> ${g!==NOGRP?`<button class="btn sm" data-act="rengrp" data-g="${esc(g)}">เปลี่ยนชื่อหมวด</button>`:''}</span></td></tr>`;
+    if(col)continue;
+    h+=view.filter(x=>gname(x)===g).map(x=>{const t=x.it;return`<tr class="${x.over||x.capOver?'overr':''}"><td><input type="text" data-b="${t.id}:name" value="${esc(t.name)}"></td><td><input type="text" data-b="${t.id}:unit" value="${esc(t.unit||'')}"></td><td><input type="number" step="any" data-b="${t.id}:qty" value="${t.qty||''}"></td><td><input type="number" step="any" data-b="${t.id}:rate" value="${t.rate||''}"></td><td><input type="number" step="any" data-b="${t.id}:bq" value="${t.bq||''}"></td><td><input type="number" step="any" data-b="${t.id}:cap" value="${t.cap||''}"></td>
+    <td class="r mono">${fq(x.alloc)}</td><td class="r mono ${x.remain<0?'bad':''}">${x.qty?fq(x.remain):'-'}</td><td class="r mono ${x.roomTotal&&x.qty&&Math.abs(x.roomTotal-x.qty)>.5?'warnt':''}">${x.roomTotal?fq(x.roomTotal):'-'}</td><td class="r mono">${fq(x.done)}</td><td><input type="text" data-b="${t.id}:note" value="${esc(t.note||'')}">${x.over?'<div class="small bad">จัดสรรเกิน BOQ</div>':''}${x.noBoq?'<div class="small warnt">ไม่มี BOQ คลุม</div>':''}${x.capOver?`<div class="small bad">เกิน 80% BOQ${x.shared?` (รวมรายการที่ใช้ BOQ เดียวกัน ${fq(x.capSum)} / ${fq(x.cap)})`:''}</div>`:''}</td><td><input type="text" list="grplist" data-bg="${t.id}" value="${esc(t.group||'')}" placeholder="หมวด"></td><td><button class="btn sm bad" data-act="delboq" data-id="${t.id}">ลบ</button></td></tr>`}).join('')}
+  if(!shown.length)h+='<tr><td colspan="13" class="empty small">ไม่พบรายการ — นำเข้าจาก Excel หรือเพิ่มเอง</td></tr>';
+  return h+'</tbody></table></div>';
 }
 
 /* ---- ตารางห้อง ---- */
