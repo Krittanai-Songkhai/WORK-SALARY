@@ -5,14 +5,16 @@ const roomsOf=c=>(c.roomIds||[]).map(id=>by('rooms',id)).filter(Boolean).sort((a
 const itemCovered=it=>!!it&&(it.bqMapped?num(it.bq)>0:num(it.qty)>0);
 const crewItemIds=c=>Object.keys(c.rates||{}).filter(id=>by('boq',id));
 /* แถวงานของชุด (โหมดรายการ = lines ของชุด, โหมดห้อง = ห้อง × ITEM ที่ชุดนั้นทำ) */
+function lineRows(c){return(c.lines||[]).map(l=>({key:l.id,floor:l.floor||'',room:'',name:l.name,boqId:l.boqId||'',unit:l.unit,qty:num(l.qty),rate:num(l.rate),note:l.note||'',nb:l.nb||'nobq',extra:true,boq:itemCovered(l.boqId&&by('boq',l.boqId))}))}
 function crewRows(c){
   if(c.mode==='room'){
     const items=crewItemIds(c).map(id=>by('boq',id)).sort((a,b)=>natCmp(a.name,b.name));const rows=[];
     for(const r of roomsOf(c))for(const it of items){const q=num((r.qty||{})[it.id]);if(q>0)rows.push({key:r.id+'~'+it.id,floor:r.floor||'',room:r.name,roomId:r.id,name:it.name,boqId:it.id,unit:it.unit||'ตร.ม.',qty:q,rate:num(c.rates[it.id]),note:'',boq:itemCovered(it)})}
-    return rows;
+    return rows.concat(lineRows(c));
   }
-  return(c.lines||[]).map(l=>({key:l.id,floor:l.floor||'',room:'',name:l.name,boqId:l.boqId||'',unit:l.unit,qty:num(l.qty),rate:num(l.rate),note:l.note||'',boq:itemCovered(l.boqId&&by('boq',l.boqId))}));
+  return lineRows(c).map(r=>({...r,extra:false}));
 }
+const needsBoqWarn=r=>!r.boq&&(r.nb||'nobq')==='nobq';
 /* คำนวณงวด no (ไม่ระบุ = งวดล่าสุด) */
 function calcCrew(c,no){
   const subs=subsOf(c);const cur=no!=null?subs.find(s=>s.no===no):subs[subs.length-1];const n=cur?cur.no:(subs.length?subs[subs.length-1].no+1:1);
@@ -22,7 +24,7 @@ function calcCrew(c,no){
     const cum=prev+q;return{...r,prev,cur:q,cum,amt:r.qty*r.rate,prevAmt:prev*r.rate,curAmt:q*r.rate,cumAmt:cum*r.rate,pct:r.qty?cum/r.qty*100:0,over:cum>r.qty+1e-9}});
   const sum=k=>rows.reduce((a,r)=>a+r[k],0);
   const T={amt:sum('amt'),prevAmt:sum('prevAmt'),curAmt:sum('curAmt'),cumAmt:sum('cumAmt')};T.pct=T.amt?T.cumAmt/T.amt*100:0;T.prevPct=T.amt?T.prevAmt/T.amt*100:0;T.curPct=T.amt?T.curAmt/T.amt*100:0;
-  return{crew:c,sub:cur||null,no:n,rows,T,subs,missing:rows.filter(r=>!r.boq).length};
+  return{crew:c,sub:cur||null,no:n,rows,T,subs,missing:rows.filter(needsBoqWarn).length};
 }
 const crewTotal=c=>calcCrew(c).T;
 /* คุมงบเทียบ BOQ ของอาคาร: ปริมาณ BOQ / จัดสรรให้ชุดต่างๆ / ปริมาณห้องรวม / เบิกสะสม */
@@ -34,8 +36,8 @@ function boqControl(b){
   return items.map(it=>{
     let alloc=0,done=0,amt=0;
     for(const c of crews){
-      if(c.mode==='room'){if(c.rates&&c.rates[it.id]!==undefined){for(const r of roomsOf(c))alloc+=num((r.qty||{})[it.id])}}
-      else for(const l of c.lines||[])if(l.boqId===it.id)alloc+=num(l.qty);
+      if(c.mode==='room'&&c.rates&&c.rates[it.id]!==undefined){for(const r of roomsOf(c))alloc+=num((r.qty||{})[it.id])}
+      for(const l of c.lines||[])if(l.boqId===it.id)alloc+=num(l.qty);
       const k=calcCrew(c);for(const r of k.rows)if(r.boqId===it.id){done+=r.cum;amt+=r.cumAmt}
     }
     const roomTotal=S.rooms.filter(r=>r.building===it.building).reduce((a,r)=>a+num((r.qty||{})[it.id]),0);
@@ -44,7 +46,7 @@ function boqControl(b){
     return{it,qty:q,alloc,remain:q-alloc,done,amt,roomTotal,over:alloc>q+1e-9&&q>0,cap,capSum,shared,capOver:cap>0&&capSum>cap+1e-9,noBoq:!itemCovered(it)}
   });
 }
-const unlinkedCount=()=>S.crews.reduce((a,c)=>a+(c.skip?0:crewRows(c).filter(r=>!r.boq).length),0);
+const unlinkedCount=()=>S.crews.reduce((a,c)=>a+(c.skip?0:crewRows(c).filter(needsBoqWarn).length),0);
 function newCrew(o){return add('crews',Object.assign({building:S.project.buildings[0]||'',name:'',kind:'sub',mode:'line',detail:'',skip:false,note:'',lines:[],rates:{},roomIds:[],order:S.crews.length},o))}
 function newLine(c,o){const l=Object.assign({id:uid(),floor:'',name:'',unit:'ตร.ม.',qty:0,rate:0,boqId:'',note:''},o);c.lines.push(l);save(c);return l}
 function nextNo(c){const s=subsOf(c);return s.length?s[s.length-1].no+1:1}
@@ -54,6 +56,8 @@ function newSub(c){const s=subsOf(c);const last=s[s.length-1];
 
 /* ----- ข้อมูลเริ่มต้น: อาคาร/ชุดช่างตามรายชื่อที่ให้มา ----- */
 function seedData(){
+  const _u=uid;let _n=0;uid=()=>'sd'+(_n++).toString(36);try{seedData0()}finally{uid=_u}}
+function seedData0(){
   const mk=(building,name,kind,mode,detail,extra)=>newCrew(Object.assign({building,name,kind,mode,detail:detail||''},extra||{}));
   const clear='งานเคลียร์ขยะ / งานขึ้นของ / งานสกัดพื้นเพื่อเทปรับกระเบื้องยาง / งานก่ออิฐบันไดหลักและหนีไฟ / งานเทปรับและฉาบแต่งคานท้องพื้นบันได';
   mk('D','ชุดพี่ขาว (ขึ้นของ/สกัดแต่ง)','sub','line','ขึ้นของอาคาร พวกปูนและงานสกัดแต่ง');

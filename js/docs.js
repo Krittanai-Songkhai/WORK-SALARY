@@ -37,10 +37,11 @@ function dHead(c,k,title){
 }
 const dFoot=(c,k)=>`<div class="dpf"><span>${esc(S.project.name)} · ${esc(c.building)} · ${esc(c.name)} · งวดที่ ${k.no}</span><span>%%P%% / %%N%%</span></div>`;
 const sigHTML=()=>`<div class="sig"><div>ผู้ส่งงาน / หัวหน้าชุด</div><div>ผู้ตรวจรับงาน (ผู้ควบคุมงาน)</div><div>ผู้อนุมัติ</div></div>`;
-const rowNote=r=>[r.note,r.boq?'':'ไม่มี BOQ คลุม',r.over?'เกินปริมาณสัญญา':''].filter(Boolean).join(' · ');
+const rowNote=r=>[r.note,r.boq?'':({extra:'งานเพิ่ม',none:''}[r.nb]===undefined?'ไม่มี BOQ คลุม':{extra:'งานเพิ่ม',none:''}[r.nb]),r.over?'เกินปริมาณสัญญา':''].filter(Boolean).join(' · ');
 
 /* --- ชุดแบบรายการ (ตารางเบิกผลงานตามรูปแบบ Excel) --- */
-function linePages(c,k){
+function linePages(c,k,o){
+  o=o||{};
   const rows=k.rows;const CH=17,LASTMAX=13;const chunks=[];
   for(let i=0;i<rows.length;i+=CH)chunks.push(rows.slice(i,i+CH));if(!chunks.length)chunks.push([]);
   let extra=false;if(chunks[chunks.length-1].length>LASTMAX)extra=true;
@@ -50,18 +51,20 @@ function linePages(c,k){
     <tr><th>ปริมาณ</th><th>หน่วย</th><th>ค่าแรง/หน่วย</th><th>บาท</th><th>ปริมาณ</th><th>บาท</th><th class="cur">ปริมาณ</th><th class="cur">บาท</th><th>ยอดเบิกสะสม (บาท)</th><th>% สะสม</th></tr></thead>`;
   const tr=r=>{const f=r.floor!==lastFl?r.floor:'';lastFl=r.floor;return`<tr><td class="c">${esc(f)}</td><td>${esc(r.name)}</td><td class="n">${fq(r.qty)}</td><td class="c">${esc(r.unit)}</td><td class="n">${f2(r.rate)}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${r.prevAmt?f2(r.prevAmt):'-'}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${r.curAmt?f2(r.curAmt):'-'}</td><td class="n">${r.cumAmt?f2(r.cumAmt):'-'}</td><td class="n">${pct(r.pct)}</td><td class="warn">${esc(rowNote(r))}</td></tr>`};
   const totRow=`<tr class="tot"><td colspan="2" class="c">รวม</td><td></td><td></td><td></td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="n cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td></td></tr>`;
-  const fin=`<div class="sum"><span>รวมเป็นเงินเบิกผลงาน งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${k.missing?`<div style="font-size:10.5px;color:#b00;margin-top:4px">* มี ${k.missing} รายการที่ไม่มี BOQ คลุม (ระบุไว้ในช่องหมายเหตุ)</div>`:''}${sigHTML()}`;
+  const fin=`<div class="sum"><span>${o.sumLabel||'รวมเป็นเงินเบิกผลงาน'} งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${k.missing?`<div style="font-size:10.5px;color:#b00;margin-top:4px">* มี ${k.missing} รายการที่ไม่มี BOQ คลุม (ระบุไว้ในช่องหมายเหตุ)</div>`:''}${o.nosig?'':sigHTML()}`;
   chunks.forEach((ch,i)=>{const lastP=i===chunks.length-1&&!extra;
-    pages.push(`<div class="dp">${dHead(c,k,i===0?`ตารางแบ่งจ่าย ส่งเบิกผลงาน${KINDTXT[c.kind]||''}`:'ตารางแบ่งจ่าย ส่งเบิกผลงาน (ต่อ)')}<table class="dt">${col}${head}<tbody>${ch.map(tr).join('')}${lastP?totRow:''}</tbody></table>${lastP?fin:''}${dFoot(c,k,i+1,N)}</div>`)});
-  if(extra)pages.push(`<div class="dp">${dHead(c,k,'สรุปรวมเบิกผลงาน')}<table class="dt">${col}${head}<tbody>${totRow}</tbody></table>${fin}${dFoot(c,k,N,N)}</div>`);
+    pages.push(`<div class="dp">${dHead(c,k,i===0?(o.title||`ตารางแบ่งจ่าย ส่งเบิกผลงาน${KINDTXT[c.kind]||''}`):(o.title||'ตารางแบ่งจ่าย ส่งเบิกผลงาน')+' (ต่อ)')}<table class="dt">${col}${head}<tbody>${ch.map(tr).join('')}${lastP?totRow:''}</tbody></table>${lastP?fin:''}${dFoot(c,k,i+1,N)}</div>`)});
+  if(extra)pages.push(`<div class="dp">${dHead(c,k,o.title||'สรุปรวมเบิกผลงาน')}<table class="dt">${col}${head}<tbody>${totRow}</tbody></table>${fin}${dFoot(c,k,N,N)}</div>`);
   return pages;
 }
 
 /* --- ชุดแบบห้อง (ตารางห้อง × ITEM พร้อมปริมาณ ตร.ม.) --- */
 function itemAgg(k){
-  const m=new Map();for(const r of k.rows){let a=m.get(r.boqId);if(!a){a={boqId:r.boqId,name:r.name,unit:r.unit,rate:r.rate,qty:0,prev:0,cur:0,cum:0};m.set(r.boqId,a)}a.qty+=r.qty;a.prev+=r.prev;a.cur+=r.cur;a.cum+=r.cum}
+  const m=new Map();for(const r of k.rows.filter(x=>x.roomId)){let a=m.get(r.boqId);if(!a){a={boqId:r.boqId,name:r.name,unit:r.unit,rate:r.rate,qty:0,prev:0,cur:0,cum:0};m.set(r.boqId,a)}a.qty+=r.qty;a.prev+=r.prev;a.cur+=r.cur;a.cum+=r.cum}
   return[...m.values()].sort((a,b)=>natCmp(a.name,b.name));
 }
+const sumT=rows=>{const T={amt:0,prevAmt:0,curAmt:0,cumAmt:0};rows.forEach(r=>{T.amt+=r.amt;T.prevAmt+=r.prevAmt;T.curAmt+=r.curAmt;T.cumAmt+=r.cumAmt});T.pct=T.amt?T.cumAmt/T.amt*100:0;return T};
+const extraK=k=>{const ex=k.rows.filter(r=>r.extra);return ex.length?{...k,rows:ex,T:sumT(ex),missing:ex.filter(needsBoqWarn).length}:null};
 function roomPages(c,k){
   const items=itemAgg(k);const pages=[];const IC=4,RP=16;const chunks=[];
   for(let i=0;i<items.length;i+=IC)chunks.push(items.slice(i,i+IC));if(!chunks.length)chunks.push([]);
@@ -85,13 +88,16 @@ function roomPages(c,k){
   // หน้าสรุปงบ
   const bc=boqControl(c.building);const bq=id=>bc.find(x=>x.it.id===id);
   const srows=items.map(it=>{const b=bq(it.boqId);const a=it.cum;return`<tr><td>${esc(it.name)}</td><td class="c">${esc(it.unit)}</td><td class="n">${fq(it.qty)}</td><td class="n">${f2(it.rate)}</td><td class="n">${f2(it.qty*it.rate)}</td><td class="n">${fq(it.prev)}</td><td class="n">${f2(it.prev*it.rate)}</td><td class="n cur">${fq(it.cur)}</td><td class="n cur">${f2(it.cur*it.rate)}</td><td class="n">${f2(a*it.rate)}</td><td class="n">${pct(it.qty?a/it.qty*100:0)}</td><td class="n">${b&&b.qty?fq(b.qty):'-'}</td><td class="n">${b&&b.qty?fq(b.qty-b.alloc):'-'}</td><td class="warn">${b&&b.qty?(b.over?'จัดสรรเกิน BOQ':''):'ไม่มี BOQ คลุม'}</td></tr>`}).join('');
+  const exr=k.rows.filter(r=>r.extra).map(r=>`<tr><td>${esc((r.floor?r.floor+' · ':'')+r.name)}</td><td class="c">${esc(r.unit)}</td><td class="n">${fq(r.qty)}</td><td class="n">${f2(r.rate)}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${f2(r.prevAmt)}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${f2(r.curAmt)}</td><td class="n">${f2(r.cumAmt)}</td><td class="n">${pct(r.pct)}</td><td class="n">-</td><td class="n">-</td><td class="warn">${esc(rowNote(r))}</td></tr>`).join('');
   const sumPage=`<table class="dt"><colgroup><col style="width:170px"><col style="width:44px"><col style="width:66px"><col style="width:58px"><col style="width:86px"><col style="width:66px"><col style="width:84px"><col style="width:66px"><col style="width:86px"><col style="width:88px"><col style="width:54px"><col style="width:66px"><col style="width:66px"><col></colgroup>
     <thead><tr><th rowspan="2">ITEM</th><th rowspan="2">หน่วย</th><th colspan="3">ราคาจัดจ้าง (ห้องที่ได้รับ)</th><th colspan="2">สะสมก่อน</th><th colspan="2" class="cur">งวดนี้</th><th colspan="2">รวมเบิกสะสม</th><th colspan="2">เทียบ BOQ</th><th rowspan="2">หมายเหตุ</th></tr>
     <tr><th>ปริมาณ</th><th>ค่าแรง/หน่วย</th><th>บาท</th><th>ปริมาณ</th><th>บาท</th><th class="cur">ปริมาณ</th><th class="cur">บาท</th><th>บาท</th><th>%</th><th>BOQ</th><th>คงเหลือ</th></tr></thead>
-    <tbody>${srows}<tr class="tot"><td colspan="4" class="c">รวม</td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td colspan="3"></td></tr></tbody></table>
+    <tbody>${srows}${exr?`<tr class="fl"><td colspan="14">รายการอื่นๆ นอกตารางห้อง</td></tr>${exr}`:''}<tr class="tot"><td colspan="4" class="c">รวม</td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td colspan="3"></td></tr></tbody></table>
     <div class="sum"><span>รวมเป็นเงินเบิกผลงาน งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${sigHTML()}`;
   parts.push({head:dHead(c,k,'สรุปงบเบิกผลงาน (คุมงบตามปริมาณ ตร.ม. ต่อ ITEM)'),html:sumPage});
-  const N=parts.length;return parts.map((p,i)=>`<div class="dp">${p.head}${p.html}${dFoot(c,k,i+1,N)}</div>`);
+  const out=parts.map(p=>`<div class="dp">${p.head}${p.html}${dFoot(c,k)}</div>`);
+  const ek=extraK(k);if(ek)out.splice(out.length-1,0,...linePages(c,ek,{title:'รายการอื่นๆ นอกตารางห้อง',sumLabel:'รวมรายการอื่นๆ',nosig:true}));
+  return out;
 }
 function attachPages(c,k){
   const s=k.sub;if(!s)return[];const out=[];const hd=t=>dHead(c,k,t);
@@ -157,30 +163,3 @@ async function pagesToPdf(pages){
   }
 }
 (function(){const s=document.createElement('style');s.textContent=DOC_CSS+`.ov.full{background:var(--bg);display:flex;flex-direction:column;align-items:stretch;padding:0}.pvbar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}.pvbody{flex:1;overflow:auto;padding:12px}`;document.head.appendChild(s)})();
-
-/* ----- Excel ----- */
-function crewAOA(c,no){
-  const k=calcCrew(c,no);const P=S.project;const a=[];
-  a.push(['โครงการ',P.name,'','',c.name,'','','','หมวดงาน',P.category]);a.push(['ผู้ว่าจ้าง',P.client,'','','','','','','Date',fmtDate(k.sub&&k.sub.date||todayISO())]);
-  a.push([`${KINDTXT[c.kind]||'ชุด'}: ${c.name}`,'','','อาคาร '+c.building,'','งวดที่ '+k.no,'',c.detail||'']);a.push([]);
-  if(c.mode==='room'){
-    a.push(['ชั้น','ห้อง','ITEM','หน่วย','ปริมาณ','ค่าแรง/หน่วย','บาท','สะสมก่อน','งวดนี้','บาท (งวดนี้)','สะสมรวม','% สะสม']);
-    k.rows.forEach(r=>a.push([r.floor,r.room,r.name,r.unit,r.qty,r.rate,r.amt,r.prev,r.cur,r.curAmt,r.cum,+r.pct.toFixed(2)]));
-  }else{
-    a.push(['ชั้น','รายการ','ปริมาณ','หน่วย','ค่าแรง/หน่วย','บาท','งวดก่อน ปริมาณ','งวดก่อน บาท','งวดนี้ ปริมาณ','งวดนี้ บาท','ยอดเบิกสะสม','% สะสม','หมายเหตุ']);
-    k.rows.forEach(r=>a.push([r.floor,r.name,r.qty,r.unit,r.rate,r.amt,r.prev,r.prevAmt,r.cur,r.curAmt,r.cumAmt,+r.pct.toFixed(2),rowNote(r)]));
-  }
-  a.push([]);a.push(['รวมมูลค่าสัญญา',k.T.amt]);a.push(['เบิกก่อนหน้า',k.T.prevAmt]);a.push(['เบิกงวดนี้',k.T.curAmt]);a.push(['เบิกสะสม',k.T.cumAmt]);a.push(['% สะสม',+k.T.pct.toFixed(2)]);
-  return a;
-}
-function exportXlsx(c,no){
-  if(!window.XLSX){toast('ยังโหลดตัวสร้าง Excel ไม่ได้ (ต้องมีอินเทอร์เน็ตครั้งแรก)');return}
-  const wb=XLSX.utils.book_new();const k=calcCrew(c,no);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(crewAOA(c,no)),('งวด '+k.no).slice(0,30));
-  XLSX.writeFile(wb,safeName(`${c.building}_${c.name}_งวด${k.no}`)+'.xlsx');
-}
-function exportBuildingXlsx(b){
-  if(!window.XLSX){toast('ยังโหลดตัวสร้าง Excel ไม่ได้');return}
-  const a=[['ที่','อาคาร','ชุด','ประเภท','รายละเอียดงาน','มูลค่าสัญญา','เบิกก่อนหน้า','งวดล่าสุด','รวมเบิกสะสม','%','หมายเหตุ']];
-  S.crews.filter(c=>!b||c.building===b).forEach((c,i)=>{const k=calcCrew(c);a.push([i+1,c.building,c.name,KIND[c.kind],c.detail,k.T.amt,k.T.prevAmt,k.T.curAmt,k.T.cumAmt,+k.T.pct.toFixed(2),[c.skip?'ไม่ส่งงานงวดนี้':'',c.note].filter(Boolean).join(' · ')])});
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'สรุป');XLSX.writeFile(wb,safeName('สรุปส่งงาน_'+(b||'ทุกอาคาร'))+'.xlsx');
-}

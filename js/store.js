@@ -1,7 +1,7 @@
 /* ===== Work Desk: ข้อมูล + บันทึกในเครื่อง + ซิงก์ Supabase (ตาราง docs เดิม, collection ขึ้นต้น wd_) ===== */
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const uid=()=>Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
+let uid=()=>Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
 const num=v=>{const n=parseFloat(String(v==null?'':v).replace(/,/g,''));return isFinite(n)?n:0};
 const f2=n=>(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fq=n=>(+n||0).toLocaleString('en-US',{maximumFractionDigits:3});
@@ -27,17 +27,17 @@ const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.par
 let DIRTY=new Set(LS.get('wd:dirty',[])),DELS=LS.get('wd:dels',[]),SYNCED=new Set(LS.get('wd:synced',[]));
 const keyOf=(c,id)=>c+'/'+id;
 function persist(){LS.set('wd:data',S);LS.set('wd:dirty',[...DIRTY]);LS.set('wd:dels',DELS);LS.set('wd:synced',[...SYNCED]);setStatus()}
-let _pt=0;function save(...objs){objs.forEach(o=>{if(o&&o._c)DIRTY.add(keyOf(o._c,o.id))});DIRTY.add('wd_project/project');clearTimeout(_pt);_pt=setTimeout(()=>{persist();cloudSoon()},250)}
+let _pt=0;function save(...objs){objs.forEach(o=>{if(o&&o._c)DIRTY.add(keyOf(o._c,o.id))});if(!objs.length||objs.includes(S.project))DIRTY.add('wd_project/project');clearTimeout(_pt);_pt=setTimeout(()=>{persist();cloudSoon()},250)}
 const tag=(c,o)=>{Object.defineProperty(o,'_c',{value:COLL[c],enumerable:false,writable:true});return o};
 function tagAll(){for(const c in COLL)S[c]=(S[c]||[]).map(o=>tag(c,o))}
 function add(c,o){o.id=o.id||uid();tag(c,o);S[c].push(o);save(o);return o}
-function del(c,id){const i=S[c].findIndex(o=>o.id===id);if(i<0)return;S[c].splice(i,1);DIRTY.delete(keyOf(COLL[c],id));DELS.push(keyOf(COLL[c],id));save()}
+function del(c,id){const i=S[c].findIndex(o=>o.id===id);if(i<0)return;S[c].splice(i,1);DIRTY.delete(keyOf(COLL[c],id));DELS.push(keyOf(COLL[c],id));save(null)}
 const by=(c,id)=>S[c].find(o=>o.id===id);
 
 function setStatus(){const n=DIRTY.size+DELS.length;MODE.pending=n;const el=$('#sync');if(el)el.innerHTML=statusHTML()}
 function statusHTML(){
-  if(MODE.kind==='local')return'<span class="chip">ในเครื่องนี้</span>';
-  const n=MODE.pending;return MODE.ok?(n?`<span class="chip warn">รอส่ง ${n}</span>`:'<span class="chip good">ซิงก์แล้ว</span>'):`<span class="chip bad">ออฟไลน์ · รอส่ง ${n}</span>`}
+  if(MODE.kind==='local')return cloudOn()?'<span class="chip warn" data-act="login" style="cursor:pointer" title="ข้อมูลไม่ซิงก์กับเครื่องอื่น — กดเพื่อเข้าสู่ระบบ">ในเครื่องนี้ · ยังไม่ซิงก์ (กดเข้าสู่ระบบ)</span>':'<span class="chip">ในเครื่องนี้</span>';
+  const n=MODE.pending,a='data-act="syncnow" style="cursor:pointer" title="กดเพื่อซิงก์ตอนนี้"';return MODE.ok?(n?`<span class="chip warn" ${a}>รอส่ง ${n}</span>`:`<span class="chip good" ${a}>ซิงก์แล้ว ↻</span>`):`<span class="chip bad" ${a}>ออฟไลน์ · รอส่ง ${n}</span>`}
 
 /* ----- Supabase ----- */
 const cfg=()=>window.APP_CONFIG||{};
@@ -86,9 +86,10 @@ const _projectDoc=()=>({project:{...S.project}});
 async function cloudLoad(){
   const rows=[];
   for(let from=0;;from+=1000){const{data,error}=await MODE.sb.from('docs').select('collection,id,data').in('collection',Object.values(COLL).concat('wd_project')).range(from,from+999);if(error)throw error;rows.push(...data);if(data.length<1000)break}
-  const seen=new Set();
+  const seen=new Set();const first=SYNCED.size===0&&rows.length>0;
   for(const r of rows){const k=keyOf(r.collection,r.id);seen.add(k);
     if(r.collection==='wd_project'){if(!DIRTY.has(k)&&r.data&&r.data.project)S.project=Object.assign(S.project,r.data.project);SYNCED.add(k);continue}
+    if(first&&r.collection!=='wd_project'){DIRTY.delete(k);DELS=DELS.filter(x=>x!==k)}
     if(DIRTY.has(k)||DELS.includes(k))continue;
     const list=Object.keys(COLL).find(x=>COLL[x]===r.collection);if(!list)continue;
     const i=S[list].findIndex(o=>o.id===r.id);const o=tag(list,r.data);if(i>=0)S[list][i]=o;else S[list].push(o);SYNCED.add(k)}
@@ -122,10 +123,14 @@ async function initStore(){
         cloudSoon();
         window.addEventListener('online',()=>{MODE.ok=true;cloudFlush()});
         window.addEventListener('offline',()=>{MODE.ok=false;setStatus()});
-        document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&!DIRTY.size&&!DELS.length&&!$('.ov')){try{await cloudLoad();render()}catch(e){}}});
-      }else if(!LS.get('wd:local',0))setTimeout(()=>loginDialog(),300);
+        const pull=async()=>{if(document.visibilityState!=='visible'||$('.ov'))return;const a=document.activeElement;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;
+          try{if(DIRTY.size||DELS.length){await cloudFlush();if(DIRTY.size||DELS.length)return}
+            const before=JSON.stringify(S);await cloudLoad();if(JSON.stringify(S)!==before){render();toast('อัปเดตข้อมูลจากเครื่องอื่นแล้ว')}}catch(e){}};
+        document.addEventListener('visibilitychange',pull);window.addEventListener('focus',pull);setInterval(pull,20000);
+      }else if(!LS.get('wd:local',0))setTimeout(()=>loginDialog(()=>{if(!S.crews.length&&!S.boq.length){seedData();persist();render()}}),300);
     }catch(e){console.warn(e)}
   }
-  if(!S.crews.length&&!S.boq.length&&!d)seedData();
+  const wait=cloudOn()&&MODE.kind!=='cloud'&&!LS.get('wd:local',0);   // รอล็อกอินก่อน ไม่สร้างข้อมูลตัวอย่างซ้ำกันคนละเครื่อง
+  if(!S.crews.length&&!S.boq.length&&!d&&!wait)seedData();
   persist();
 }

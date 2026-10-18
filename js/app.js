@@ -5,12 +5,13 @@ function refreshSub(){
   const st=$('#substats');if(st)st.innerHTML=subStats(k);
   for(const r of k.rows){const set=(f,v)=>{const el=$(`[data-c="${r.key}:${f}"]`);if(el)el.textContent=v};set('cum',fq(r.cum));set('pct',pct(r.pct));set('amt',f2(r.curAmt));set('prev',r.prev?fq(r.prev):'-')}
   $$('input[data-e]').forEach(i=>{const r=k.rows.find(x=>x.key===i.dataset.e);if(r)i.classList.toggle('bad',r.over)});
+  $$('input[data-pe]').forEach(i=>{if(i===document.activeElement)return;const r=k.rows.find(x=>x.key===i.dataset.pe);if(r)i.value=r.qty&&r.cur?+(r.cur/r.qty*100).toFixed(2):''});
+  $$('input[data-e]').forEach(i=>{if(i===document.activeElement)return;const r=k.rows.find(x=>x.key===i.dataset.e);if(r)i.value=r.cur||''});
 }
 function setSubEntry(s,key,v){const n=num(v);s.entries=s.entries||{};if(n)s.entries[key]=n;else delete s.entries[key];save(s)}
 
 const curSubCrew=()=>{const s=curSub();return s&&by('crews',s.crewId)};
 async function fileToPng(file,max){const im=await createImageBitmap(file);const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);return c.toDataURL('image/png')}
-function xlsxBlob(c,no){const wb=XLSX.utils.book_new();const k=calcCrew(c,no);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(crewAOA(c,no)),('งวด '+k.no).slice(0,30));return new Blob([XLSX.write(wb,{type:'array',bookType:'xlsx'})],{type:'application/octet-stream'})}
 const markBoard=(o,kind,title,extra)=>openBoard(Object.assign({kind,title,imgUrl:imgSrc(o.imgId),w:o.w,h:o.h,shapes:(o.shapes=o.shapes||[]),noPin:true,onChange:()=>save(curSub()||o),onClose:()=>render()},extra||{}));
 const ACT={
   async crewpdf(el){const c=by('crews',el.dataset.id);const ss=subsOf(c);if(!ss.length){toast('ชุดนี้ยังไม่มีงวด — เปิดชุดแล้วกด “เริ่มงวดใหม่”');return}
@@ -30,7 +31,7 @@ const ACT={
       b.disabled=true;const zip=new JSZip();const used=new Set();let i=0;
       try{for(const id of ids){const c=by('crews',id);const ss=subsOf(c);const no=ss[ss.length-1].no;i++;$('#zst',o).textContent=`กำลังสร้าง ${i}/${ids.length}: ${c.name}`;
         let base=safeName(`${c.building}_${c.name}_งวด${no}`);while(used.has(base))base+='_';used.add(base);
-        if(wp)zip.file(base+'.pdf',await pagesToPdf(await crewDocReady(c,no)));if(wx)zip.file(base+'.xlsx',xlsxBlob(c,no))}
+        if(wp)zip.file(base+'.pdf',await pagesToPdf(await crewDocReady(c,no)));if(wx)zip.file(base+'.xlsx',await crewXlsxBlob(c,no))}
         const out=await zip.generateAsync({type:'blob'});await saveFile(safeName(`ส่งงาน_${UI.b||'ทุกอาคาร'}_${todayISO()}`)+'.zip',out);toast(`สร้าง ZIP ${ids.length} ชุดแล้ว`);o.remove()}
       catch(err){toast('สร้าง ZIP ไม่สำเร็จ: '+(err.message||err),5000);b.disabled=false}});
   },
@@ -83,11 +84,40 @@ const ACT={
   pctline(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===el.dataset.key);const p=+el.dataset.p;
     const v=p===100?Math.max(0,r.qty-r.prev):r.qty*p/100;setSubEntry(s,r.key,+v.toFixed(4));render()},
   async bpdf(){await ensureData([S.project.logoId],true);const pg=buildingPages(UI.b,UI.kind);previewDoc(pg,'สรุปส่งงาน_'+(UI.b||'ทุกอาคาร'))},
-  bxls(){exportBuildingXlsx(UI.b)},
+  bxls(){exportBuildingXlsx(UI.b,UI.kind)},
   newboq(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:'',name:'',unit:'',qty:0,rate:0,note:''});render()},
   delboq(el){armBtn(el,'ลบ?',()=>{del('boq',el.dataset.id);render()})},
   impboq(){importBoqAll(UI.b||S.project.buildings[0])},
   impRooms(){importDialog('rooms',UI.b||S.project.buildings[0])},
+  bulkrooms(){
+    const b=UI.b||S.project.buildings[0];const its=S.boq.filter(x=>x.building===b&&x.tile).sort((x,y)=>natCmp(x.name,y.name));
+    const o=overlay(`<div class="box wide"><div class="row" style="margin-bottom:8px"><h3 style="margin-right:auto">เพิ่มหลายห้อง / หลายชั้น อาคาร ${esc(b)}</h3><button class="btn" data-x="close">ปิด</button></div>
+     <label class="f">ชั้น (เช่น 1-7 หรือ 1,2,3,R)<input type="text" id="bf" value="1-7"></label>
+     <label class="f" style="margin-top:8px">รายชื่อห้องต่อชั้น (บรรทัดละห้อง ใช้ {F} แทนเลขชั้น)<textarea id="bn" rows="7" style="width:100%">{F}01 ห้องพัก\n{F}02 ห้องพัก\n{F}03 ห้องน้ำ\nทางเดิน ชั้น {F}</textarea></label>
+     ${its.length?`<p class="hint" style="margin-top:8px">ปริมาณ ตร.ม. ต่อห้อง (ใช้เท่ากันทุกห้อง เว้นว่าง = 0 แก้รายห้องภายหลังได้)</p><div class="grid">${its.map(i=>`<label class="f">${esc(i.name)}<input type="number" step="any" data-bq="${i.id}"></label>`).join('')}</div>`:''}
+     <div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn pri" data-x="ok">สร้างห้อง</button></div></div>`,'modal');
+    o.addEventListener('click',e=>{const x=e.target.closest('[data-x]');if(!x){if(e.target===o)o.remove();return}if(x.dataset.x==='close'){o.remove();return}
+      const fl=parseFloors($('#bf',o).value),names=$('#bn',o).value.split(/\n/).map(s=>s.trim()).filter(Boolean);
+      if(!fl.length||!names.length){toast('ใส่ชั้นและชื่อห้องก่อน');return}
+      const q={};$$('[data-bq]',o).forEach(i=>{const n=num(i.value);if(n)q[i.dataset.bq]=n});
+      fl.forEach(f=>names.forEach(n=>add('rooms',{building:b,floor:String(f),name:n.replace(/\{F\}/g,f),qty:{...q}})));
+      o.remove();toast(`สร้าง ${fl.length*names.length} ห้อง`);render()});
+  },
+  copyfloor(){
+    const b=UI.b||S.project.buildings[0];const fls=[...new Set(S.rooms.filter(r=>r.building===b).map(r=>r.floor||''))].sort(natCmp);
+    if(!fls.length){toast('ยังไม่มีห้องให้คัดลอก');return}
+    const o=overlay(`<div class="box"><div class="row" style="margin-bottom:8px"><h3 style="margin-right:auto">คัดลอกชั้น</h3><button class="btn" data-x="close">ปิด</button></div>
+     <label class="f">คัดลอกจากชั้น<select id="cf">${fls.map(f=>`<option>${esc(f)}</option>`).join('')}</select></label>
+     <label class="f" style="margin-top:8px">ไปยังชั้น (เช่น 2-7)<input type="text" id="ct" value=""></label>
+     <p class="hint">คัดลอกทุกห้องพร้อมปริมาณ ถ้าชื่อห้องขึ้นต้นด้วยเลขชั้นเดิม (เช่น 101) จะเปลี่ยนเป็นเลขชั้นใหม่ (201, 301…) และ {F}/ชั้น เดิมในชื่อก็เปลี่ยนตาม ชั้นปลายทางที่มีห้องอยู่แล้วจะถูกข้าม</p>
+     <div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn pri" data-x="ok">คัดลอก</button></div></div>`,'modal');
+    o.addEventListener('click',e=>{const x=e.target.closest('[data-x]');if(!x){if(e.target===o)o.remove();return}if(x.dataset.x==='close'){o.remove();return}
+      const src=$('#cf',o).value;const tg=parseFloors($('#ct',o).value).map(String).filter(f=>f!==src);if(!tg.length){toast('ใส่ชั้นปลายทาง');return}
+      const from=S.rooms.filter(r=>r.building===b&&(r.floor||'')===src);let n=0,skip=[];
+      tg.forEach(f=>{if(S.rooms.some(r=>r.building===b&&(r.floor||'')===f)){skip.push(f);return}
+        from.forEach(r=>{let nm=r.name;if(src&&nm.startsWith(src))nm=f+nm.slice(src.length);add('rooms',{building:b,floor:f,name:nm,qty:{...(r.qty||{})}});n++})});
+      o.remove();toast(`คัดลอก ${n} ห้อง${skip.length?' · ข้ามชั้นที่มีห้องแล้ว: '+skip.join(','):''}`,4000);render()});
+  },
   newroom(){const b=UI.b||S.project.buildings[0];const last=S.rooms.filter(r=>r.building===b).slice(-1)[0];add('rooms',{building:b,floor:last?last.floor:'1',name:'',qty:{}});render()},
   newitem(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:'งานกระเบื้อง',name:'ITEM ใหม่',unit:'ตร.ม.',qty:0,rate:0,note:'',tile:true});render()},
   delroom(el){armBtn(el,'ลบ?',()=>{S.crews.forEach(c=>{if((c.roomIds||[]).includes(el.dataset.id)){c.roomIds=c.roomIds.filter(x=>x!==el.dataset.id);save(c)}});del('rooms',el.dataset.id);render()})},
@@ -103,6 +133,19 @@ document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el||e.target.closest('input,select,textarea'))return;
   const f=ACT[el.dataset.act];if(f)f(el)});
 
+function parseFloors(t){const out=[];String(t).split(/[,，\s]+/).filter(Boolean).forEach(p=>{const m=/^(\d+)\s*[-–~]\s*(\d+)$/.exec(p);if(m){for(let i=+m[1];i<=+m[2]&&i<200;i++)out.push(String(i))}else out.push(p)});return[...new Set(out)]}
+/* วางจาก Excel ลงตารางห้อง */
+document.addEventListener('paste',e=>{
+  const t=e.target;if(!t.matches||!(t.matches('input[data-r]')||t.matches('input[data-rm2]')))return;
+  const txt=(e.clipboardData||window.clipboardData).getData('text');if(!/[\t\n]/.test(txt.trim()))return;e.preventDefault();
+  const grid=txt.replace(/\r/g,'').replace(/\n+$/,'').split('\n').map(l=>l.split('\t'));
+  const rowsEls=()=>$$('table.ed tbody tr').filter(tr=>tr.querySelector('input[data-r],input[data-rm2]'));
+  let trs=rowsEls();const r0=trs.indexOf(t.closest('tr'));const cellsOf=tr=>$$('input[data-r],input[data-rm2]',tr);const c0=cellsOf(t.closest('tr')).indexOf(t);
+  const b=UI.b||S.project.buildings[0];const need=r0+grid.length-trs.length;
+  if(need>0){const last=S.rooms.filter(r=>r.building===b).slice(-1)[0];for(let i=0;i<need;i++)add('rooms',{building:b,floor:last?last.floor:'1',name:'',qty:{}});render();trs=rowsEls()}
+  grid.forEach((row,i)=>{const tr=trs[r0+i];if(!tr)return;const cs=cellsOf(tr);row.forEach((v,j)=>{const inp=cs[c0+j];if(!inp)return;inp.value=v.trim().replace(/,/g,'');inp.dispatchEvent(new Event('input',{bubbles:true}))})});
+  toast(`วาง ${grid.length} แถว`);
+});
 const setField=(o,f,v)=>{o[f]=v;save(o)};
 document.addEventListener('input',e=>{
   const t=e.target;if(!t.matches||!t.matches('input[type=text],input[type=number],input[type=date],input[type=search],textarea'))return;const d=t.dataset;
@@ -110,6 +153,7 @@ document.addEventListener('input',e=>{
   if(d.l){const[id,f]=d.l.split(':');const c=by('crews',UI.crew);const l=c.lines.find(x=>x.id===id);const numF=f==='qty'||f==='rate';l[f]=numF?num(t.value):t.value;save(c);
     if(numF){const a=$(`[data-amt="${id}"]`);if(a)a.textContent=f2(num(l.qty)*num(l.rate));const tot=$('#lntot');if(tot)tot.innerHTML='<b>'+f2(calcCrew(c).T.amt)+'</b>'}return}
   if(d.e!==undefined){const s=curSub();setSubEntry(s,d.e,t.value);refreshSub();return}
+  if(d.pe!==undefined){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===d.pe);if(r){setSubEntry(s,r.key,t.value===''?0:+(r.qty*num(t.value)/100).toFixed(4));refreshSub()}return}
   if(d.s){const s=curSub();setField(s,d.s,t.value);return}
   if(d.b){const[id,f]=d.b.split(':');const o=by('boq',id);o[f]=(f==='qty'||f==='rate')?num(t.value):t.value;save(o);return}
   if(d.rm2){const[id,f]=d.rm2.split(':');setField(by('rooms',id),f,t.value);return}
@@ -148,6 +192,9 @@ document.addEventListener('change',async e=>{
   if(d.s==='sent'){setField(curSub(),'sent',t.checked);return}
   if(d.ri){const c=by('crews',UI.crew);c.rates=c.rates||{};if(t.checked){const b=by('boq',d.ri);c.rates[d.ri]=c.rates[d.ri]||num(b&&b.rate)}else delete c.rates[d.ri];save(c);render();return}
   if(d.rm){const c=by('crews',UI.crew);const s=new Set(c.roomIds||[]);t.checked?s.add(d.rm):s.delete(d.rm);c.roomIds=[...s];save(c);render();return}
+  if(d.pr!==undefined||d.pf!==undefined||d.pall!==undefined){const s=curSub();if(!s)return;const k=calcCrew(by('crews',s.crewId),s.no);const p=num(t.value);if(t.value==='')return;
+    const sel=d.pr!==undefined?(r=>r.roomId===d.pr):d.pf!==undefined?(r=>(r.floor||'')===d.pf&&r.roomId):(r=>r.roomId);
+    k.rows.filter(sel).forEach(r=>setSubEntry(s,r.key,+(r.qty*p/100).toFixed(4)));toast(`ใส่ ${p}% แล้ว`);render();return}
   if(d.rf!==undefined){const c=by('crews',UI.crew);const ids=S.rooms.filter(r=>r.building===c.building&&(r.floor||'')===d.rf).map(r=>r.id);const s=new Set(c.roomIds||[]);ids.forEach(i=>t.checked?s.add(i):s.delete(i));c.roomIds=[...s];save(c);render();return}
 });
 window.addEventListener('beforeunload',()=>{persist()});
