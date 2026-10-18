@@ -26,6 +26,21 @@ function shapeSvg(s,i,U,inter,nolabel){
     let o=`<polygon${da} points="${pts}" fill="${s.ref?'none':s.c}" fill-opacity="${s.ref?0:.3}" stroke="${s.c}" stroke-width="${(s.ref?2:3.4)*U}" ${s.ref?`stroke-dasharray="${9*U} ${6*U}" stroke-opacity=".75"`:''} stroke-linejoin="round" ${s.ref?'pointer-events="stroke"':''}/>`;
     if(s.label&&!nolabel){const c=polyCentroid(s.pts);o+=`<text x="${c[0]}" y="${c[1]}" font-size="${(s.fs||13)*U}" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#111" ${hl} pointer-events="none">${esc(s.label)}</text>`}
     return o}
+  case'cz':{let o=`<circle${da} cx="${s.cx}" cy="${s.cy}" r="${s.r}" fill="${s.ref?'none':s.c}" fill-opacity="${s.ref?0:.3}" stroke="${s.c}" stroke-width="${(s.ref?2:3.4)*U}" ${s.ref?`stroke-dasharray="${9*U} ${6*U}" stroke-opacity=".75" pointer-events="stroke"`:''}/>`;
+    if(s.label&&!nolabel)o+=`<text x="${s.cx}" y="${s.cy}" font-size="${(s.fs||13)*U}" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#111" ${hl} pointer-events="none">${esc(s.label)}</text>`;
+    return o}
+  case'sym':{const R=13*U*(s.z||1),x=s.x,y=s.y,c=s.c,k=s.k||'dot';const st=`stroke="#fff" stroke-width="${2*U}" stroke-linejoin="round"`;let g='';
+    const poly=pts=>`<polygon points="${pts.map(q=>q.map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="${c}" ${st}/>`;
+    if(k==='dot')g=`<circle cx="${x}" cy="${y}" r="${R}" fill="${c}" ${st}/>`;
+    else if(k==='ring')g=`<circle cx="${x}" cy="${y}" r="${R}" fill="#fff" fill-opacity=".35" stroke="${c}" stroke-width="${3.4*U}"/>`;
+    else if(k==='square')g=`<rect x="${x-R}" y="${y-R}" width="${2*R}" height="${2*R}" rx="${2*U}" fill="${c}" ${st}/>`;
+    else if(k==='diamond')g=poly([[x,y-R*1.25],[x+R*1.25,y],[x,y+R*1.25],[x-R*1.25,y]]);
+    else if(k==='tri')g=poly([[x,y-R*1.2],[x+R*1.2,y+R*.9],[x-R*1.2,y+R*.9]]);
+    else if(k==='star'){const pts=[];for(let i=0;i<10;i++){const r=(i%2?R*.5:R*1.3),a=-Math.PI/2+i*Math.PI/5;pts.push([x+r*Math.cos(a),y+r*Math.sin(a)])}g=poly(pts)}
+    else if(k==='check')g=`<circle cx="${x}" cy="${y}" r="${R}" fill="#fff" stroke="${c}" stroke-width="${2.6*U}"/><path d="M${x-R*.5} ${y} L${x-R*.12} ${y+R*.42} L${x+R*.55} ${y-R*.4}" fill="none" stroke="${c}" stroke-width="${3.4*U}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    else if(k==='cross')g=`<circle cx="${x}" cy="${y}" r="${R}" fill="#fff" stroke="${c}" stroke-width="${2.6*U}"/><path d="M${x-R*.45} ${y-R*.45} L${x+R*.45} ${y+R*.45} M${x+R*.45} ${y-R*.45} L${x-R*.45} ${y+R*.45}" fill="none" stroke="${c}" stroke-width="${3.4*U}" stroke-linecap="round"/>`;
+    if(s.label&&!nolabel)g+=`<text x="${x}" y="${y+R*1.25+11*U}" font-size="${(s.fs||12)*U}" font-weight="700" text-anchor="middle" fill="#111" ${hl} pointer-events="none">${esc(s.label)}</text>`;
+    return`<g${da}>${g}${inter?`<circle cx="${x}" cy="${y}" r="${R*1.5}" fill="transparent"/>`:''}</g>`}
   case'text':return`<text${da} x="${s.x}" y="${s.y}" font-size="${(s.fs||16)*U}" font-weight="700" fill="${s.c}" ${hl} style="white-space:pre">${esc(s.s)}</text>`;
   case'arrow':{const a=Math.atan2(s.y2-s.y1,s.x2-s.x1),L=(10+s.sw*2.2)*U*1.4,sw=s.sw*U;const hx=s.x2-Math.cos(a)*L*.5,hy=s.y2-Math.sin(a)*L*.5;
     const p1=[s.x2-L*Math.cos(a-.42),s.y2-L*Math.sin(a-.42)],p2=[s.x2-L*Math.cos(a+.42),s.y2-L*Math.sin(a+.42)];
@@ -49,7 +64,8 @@ function mirrorShapes(shapes,W,H,axis){
     if(s.pts)s.pts=s.pts.map(p=>[fx(p[0]),fy(p[1])]);
     else if(s.t==='arrow'){s.x1=fx(s.x1);s.x2=fx(s.x2);s.y1=fy(s.y1);s.y2=fy(s.y2)}
     else if(s.t==='rect'){if(axis==='x')s.x=W-s.x-s.w;else s.y=H-s.y-s.h}
-    else if(s.t==='ell'){s.cx=fx(s.cx);s.cy=fy(s.cy)}
+    else if(s.t==='ell'||s.t==='cz'){s.cx=fx(s.cx);s.cy=fy(s.cy)}
+    else if(s.t==='sym'){s.x=fx(s.x);s.y=fy(s.y)}
     else if(s.t==='text'){s.x=fx(s.x);s.y=fy(s.y)}
   });
 }
@@ -70,13 +86,16 @@ function annotatedSvg(imgUrl,w,h,shapes,pins,opts={}){
 }
 
 /* ========= overlays / dialogs ========= */
+let BOARD_CLIP=null;const BOARD_SYM={k:'dot',z:1};
+const SYMS=[['dot','● จุด'],['ring','◯ วงแหวน'],['square','■ ช่อง'],['diamond','◆ ข้าวหลามตัด'],['tri','▲ สามเหลี่ยม'],['star','★ ดาว'],['check','✔ เสร็จ'],['cross','✖ ไม่ผ่าน']];
+function shapeMove(s,dx,dy){if(s.pts)s.pts=s.pts.map(q=>[q[0]+dx,q[1]+dy]);else if(s.t==='arrow'){s.x1+=dx;s.x2+=dx;s.y1+=dy;s.y2+=dy}else if(s.t==='ell'||s.t==='cz'){s.cx+=dx;s.cy+=dy}else{s.x+=dx;s.y+=dy}}
 function openBoard(cfg){
   const {w,h}=cfg;const H=unitOf(w,h);let SC=cfg.scale?cfg.scale():1;let U=H*SC;
   const photo=cfg.kind==='photo';const ro=!!cfg.ro;
   const tools=ro?[['pan','เลื่อน / ซูม']]:photo?[['select','เลือก/ย้าย'],['pen','ปากกา'],['arrow','ลูกศร'],['rect','กรอบ'],['ell','วงรี'],['text','ข้อความ'],['pan','เลื่อนภาพ']]
-    :[['select','เลือก/ย้าย'],['zone','วาดโซน'],['rect','โซนสี่เหลี่ยม'],['text','ข้อความ'],['pin','ปักหมุด DEFECT'],['pan','เลื่อนแบบ']];
+    :[['select','เลือก/ย้าย'],['zone','วาดโซน'],['rect','โซนสี่เหลี่ยม'],['circ','โซนวงกลม'],['sym','สัญลักษณ์'],['text','ข้อความ'],['pin','ปักหมุด DEFECT'],['pan','เลื่อนแบบ']];
   if(cfg.noPin&&!photo&&!ro){const i=tools.findIndex(t=>t[0]==='pin');if(i>=0)tools.splice(i,1)}
-  let tool=ro?'pan':(cfg.tool||'select'),color=photo?'#e03131':COLORS[0],sw=photo?3:3,sel=-1,vtx=null;
+  let symKind=BOARD_SYM.k,symZ=BOARD_SYM.z;let tool=ro?'pan':(cfg.tool||'select'),color=photo?'#e03131':COLORS[0],sw=photo?3:3,sel=-1,vtx=null;
   let view={x:0,y:0,w:w,h:h};let draft=null;let undo=[];let drag=null;const ptrs=new Map();let pinch=null;let lastPen=0;const palm=new Set();
   const shapes=cfg.shapes;
   const o=overlay(`
@@ -87,6 +106,7 @@ function openBoard(cfg){
      ${photo&&!ro?`<label class="small muted row" style="gap:4px">หนา<input type="range" min="1" max="10" value="${sw}" id="bsw" style="width:90px"></label>`:''}
      ${!photo&&!ro&&cfg.onScale?`<label class="small muted row" style="gap:4px" title="ปรับขนาดหมุด ตัวอักษร และเส้นในแบบนี้">ขนาดสัญลักษณ์<input type="range" min="8" max="250" value="${Math.round(SC*100)}" id="bsym" style="width:110px"><b class="mono" id="bsymv">${Math.round(SC*100)}%</b></label>`:''}
      ${!photo&&!ro&&cfg.onFlip?'<button class="tool" data-a="flipx" title="กลับด้านแบบซ้าย↔ขวา (mirror)">⇋ กลับซ้าย-ขวา</button><button class="tool" data-a="flipy" title="กลับด้านแบบบน↔ล่าง">⇅ กลับบน-ล่าง</button>':''}
+     ${ro?'':'<button class="tool" data-a="copyall" title="คัดลอกทุกอย่างในแบบนี้ (วางในแบบอื่นได้)">⧉ คัดลอกทั้งหมด</button><button class="tool" data-a="paste" title="วางที่คัดลอกไว้ (Ctrl+V)">📋 วาง</button>'}
      <span style="margin-left:auto" class="row"><button class="tool" data-a="zout">−</button><button class="tool" data-a="zin">＋</button><button class="tool" data-a="fit">พอดีจอ</button></span></div>
    <div class="bmain" id="bmain"><svg id="bsvg" xmlns="http://www.w3.org/2000/svg"><image href="${cfg.imgUrl}" x="0" y="0" width="${w}" height="${h}"/><g id="gx" style="pointer-events:none"></g><g id="gs"></g><g id="gp"></g><g id="gu"></g></svg></div>
    <div class="binsp" id="binsp"></div>${!photo&&cfg.pins?'<div class="pdock" id="pdock"></div>':''}`,'board');if(cfg.stampRO!==undefined)o.dataset.ro=cfg.stampRO?'1':'0';
@@ -109,6 +129,7 @@ function openBoard(cfg){
     if(sel>=0&&shapes[sel]){const s=shapes[sel];const hs=7*H;const hnd=(x,y,k)=>`<circle data-v="${k}" cx="${x}" cy="${y}" r="${hs}" fill="#fff" stroke="#1971c2" stroke-width="${2*H}" style="cursor:grab"/>`;
       if(s.t==='poly')u+=s.pts.map((p,k)=>hnd(p[0],p[1],k)).join('');
       else if(s.t==='arrow')u+=hnd(s.x1,s.y1,0)+hnd(s.x2,s.y2,1);
+      else if(s.t==='cz')u+=hnd(s.cx+s.r,s.cy,0);
       else{const b=bbox(s);u+=`<rect x="${b[0]-4*H}" y="${b[1]-4*H}" width="${b[2]-b[0]+8*H}" height="${b[3]-b[1]+8*H}" fill="none" stroke="#1971c2" stroke-width="${1.5*H}" stroke-dasharray="${5*H} ${4*H}" pointer-events="none"/>`}
       if(s.t==='poly'){const b=bbox(s);u+=`<rect x="${b[0]}" y="${b[1]}" width="${b[2]-b[0]}" height="${b[3]-b[1]}" fill="none" stroke="#1971c2" stroke-width="${1.2*H}" stroke-dasharray="${5*H} ${4*H}" pointer-events="none"/>`}}
     if(draft){u+=draftSvg()}
@@ -129,6 +150,8 @@ function openBoard(cfg){
     else if(s.t==='arrow'){xs=[s.x1,s.x2];ys=[s.y1,s.y2]}
     else if(s.t==='rect'){xs=[s.x,s.x+s.w];ys=[s.y,s.y+s.h]}
     else if(s.t==='ell'){xs=[s.cx-s.rx,s.cx+s.rx];ys=[s.cy-s.ry,s.cy+s.ry]}
+    else if(s.t==='cz'){xs=[s.cx-s.r,s.cx+s.r];ys=[s.cy-s.r,s.cy+s.r]}
+    else if(s.t==='sym'){const R=13*U*(s.z||1)*1.3;xs=[s.x-R,s.x+R];ys=[s.y-R,s.y+R]}
     else if(s.t==='text'){const fs=(s.fs||16)*U;xs=[s.x,s.x+fs*.62*Math.max(...s.s.split('\n').map(l=>l.length))];ys=[s.y-fs,s.y+fs*(s.s.split('\n').length-1)+fs*.3]}
     return[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
   function draftSvg(){
@@ -139,6 +162,7 @@ function openBoard(cfg){
     $$('[data-tool]',o).forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===tool));
     $$('[data-color]',o).forEach(b=>b.setAttribute('aria-pressed',b.dataset.color===color));
     const hints={select:'แตะรูปร่างเพื่อเลือก ลากเพื่อย้าย',zone:'แตะเพื่อวางจุดมุม แตะจุดแรกหรือกด “จบโซน” เพื่อปิดรูป',rect:'ลากเพื่อวาดกรอบ',pen:'ลากนิ้ว/เมาส์เพื่อเขียน',arrow:'ลากจากหางไปหัวลูกศร',ell:'ลากเพื่อวาดวงรี',text:'แตะตำแหน่งที่ต้องการวางข้อความ',pin:cfg.pinFor?`แตะตำแหน่งเพื่อปักหมุด ${pinLabel(cfg.pinFor)}`:'แตะตำแหน่งที่พบ DEFECT',pan:'ลากเพื่อเลื่อน / ล้อเมาส์หรือ 2 นิ้วเพื่อซูม'};
+    hints.circ='ลากจากจุดศูนย์กลางออกไปเพื่อกำหนดรัศมี (หรือแตะเฉยๆ ได้วงมาตรฐาน)';hints.sym='แตะเพื่อวางสัญลักษณ์ (เลือกรูปแบบด้านล่าง) แตะต่อเนื่องได้เรื่อยๆ';
     hint(hints[tool]);renderInsp();
   }
   function renderInsp(){
@@ -146,13 +170,22 @@ function openBoard(cfg){
     if(draft&&draft.t==='poly'){h=`<button class="btn pri" data-a="finish">จบโซน (${draft.pts.length} จุด)</button><button class="btn" data-a="cancel">ยกเลิก</button>`}
     else if(s){
       h+=`<span class="small muted">เลือกอยู่:</span>`;
-      if(s.t==='poly'){h+=`<input type="text" id="ilabel" placeholder="ชื่อโซน เช่น ห้อง 101 / พื้นห้องน้ำ" value="${esc(s.label||'')}"><label class="chk"><input type="checkbox" id="iref" ${s.ref?'checked':''}> โซนอ้างอิง (เส้นประ)</label>`}
+      if(s.t==='sym'){h+=`<span class="row" style="gap:3px">${SYMS.map(q=>`<button class="tool" data-sk="${q[0]}" aria-pressed="${(s.k||'dot')===q[0]}">${q[1].split(' ')[0]}</button>`).join('')}</span><input type="text" id="ilabel" placeholder="ข้อความใต้สัญลักษณ์" value="${esc(s.label||'')}"><label class="small muted row" style="gap:4px">ขนาด<input type="range" min="4" max="40" value="${Math.round((s.z||1)*10)}" id="isz" style="width:90px"></label>`}
+      if(s.t==='poly'||s.t==='cz'){h+=`<input type="text" id="ilabel" placeholder="ชื่อโซน เช่น ห้อง 101 / พื้นห้องน้ำ" value="${esc(s.label||'')}"><label class="chk"><input type="checkbox" id="iref" ${s.ref?'checked':''}> โซนอ้างอิง (เส้นประ)</label>`}
       if(s.t==='text'){h+=`<input type="text" id="itext" value="${esc(s.s)}"><label class="small muted row" style="gap:4px">ขนาด<input type="range" min="8" max="60" value="${s.fs||16}" id="ifs" style="width:90px"></label>`}
       if(['pen','arrow','rect','ell'].includes(s.t))h+=`<label class="small muted row" style="gap:4px">หนา<input type="range" min="1" max="12" value="${s.sw}" id="isw" style="width:90px"></label>`;
-      h+=`<span class="row" style="gap:3px">${COLORS.map(c=>`<button class="sw" data-scolor="${c}" style="background:${c}" aria-pressed="${s.c===c}"></button>`).join('')}</span><button class="btn bad sm" data-a="del">ลบ</button>`;
+      h+=`<span class="row" style="gap:3px">${COLORS.map(c=>`<button class="sw" data-scolor="${c}" style="background:${c}" aria-pressed="${s.c===c}"></button>`).join('')}</span><button class="btn sm" data-a="copy">⧉ คัดลอก</button><button class="btn sm" data-a="dup">ทำซ้ำ</button><button class="btn bad sm" data-a="del">ลบ</button>`;
     }else if(ro)h=`<span class="small muted">ดูอย่างเดียว · ลากเพื่อเลื่อน ใช้ล้อเมาส์หรือ 2 นิ้วเพื่อซูม แตะหมุดเพื่อดูรายละเอียด DEFECT</span>`;else h=`<span class="small muted">${photo?'เขียนบนรูปเพื่อระบุจุด DEFECT: ลูกศร กรอบ และข้อความ':'วาดโซนสีบนแบบเพื่อระบุขอบเขตที่ส่งตรวจ แล้วปักหมุดตำแหน่ง DEFECT'}</span>`;
+    if(!s&&!ro&&!photo&&tool==='sym'&&!draft)h=`<span class="small muted">สัญลักษณ์:</span><span class="row" style="gap:3px">${SYMS.map(q=>`<button class="tool" data-tk="${q[0]}" aria-pressed="${symKind===q[0]}" title="${q[1]}">${q[1].split(' ')[0]}</button>`).join('')}</span><label class="small muted row" style="gap:4px">ขนาด<input type="range" min="4" max="40" value="${Math.round(symZ*10)}" id="tsz" style="width:90px"></label>`;
     insp.innerHTML=h;
   }
+  function pasteClip(){
+    if(!BOARD_CLIP||!BOARD_CLIP.shapes.length){toast('ยังไม่ได้คัดลอกอะไร — เลือกรูปร่างแล้วกด “⧉ คัดลอก” หรือ “คัดลอกทั้งหมด”');return}
+    pushUndo();const items=clone(BOARD_CLIP.shapes);const same=BOARD_CLIP.src===shapes;
+    if(items.length===1||same){ // เดี่ยว: วางกลางจอ / ชุดในแบบเดิม: เลื่อนออกเล็กน้อย
+      if(items.length===1){const b=(()=>{const t=shapes;shapes.push(items[0]);const bb=bbox(items[0]);shapes.pop();return bb})();const cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2;const tx=view.x+view.w/2,ty=view.y+view.h/2;items.forEach(s=>shapeMove(s,tx-cx,ty-cy))}
+      else items.forEach(s=>shapeMove(s,30*U,30*U))}
+    items.forEach(s=>shapes.push(s));changed();select(shapes.length-1);toast(`วาง ${items.length} รายการ`,1500)}
   function select(i){sel=i;redraw();renderInsp()}
   function addShape(s){pushUndo();shapes.push(s);changed();select(shapes.length-1)}
   function finishPoly(){if(draft&&draft.t==='poly'){if(draft.pts.length>=3){pushUndo();shapes.push({t:'poly',pts:draft.pts,c:color,label:'',ref:false});changed();draft=null;select(shapes.length-1);setTimeout(()=>{const l=$('#ilabel',o);l&&l.focus()},50);return}draft=null;redraw();renderInsp()}}
@@ -188,6 +221,8 @@ function openBoard(cfg){
       draft={t:tool,x0:p[0],y0:p[1],pts:[p]};
       if(photo||tool==='rect'||tool==='ell'||tool==='arrow')drag={m:'draw'};
       sel=-1;return}
+    if(tool==='circ'){draft={t:'circ',x0:p[0],y0:p[1],pts:[p]};drag={m:'draw'};sel=-1;return}
+    if(tool==='sym'){addShape({t:'sym',x:p[0],y:p[1],k:symKind,c:color,z:symZ,label:''});return}
     if(tool==='text'){const s={t:'text',x:p[0],y:p[1],s:'ข้อความ',c:color,fs:photo?18:14};addShape(s);setTimeout(()=>{const l=$('#itext',o);l&&(l.focus(),l.select())},50);return}
     if(tool==='pin'){cfg.onPinAdd&&cfg.onPinAdd(p[0],p[1],redraw);return}
   });
@@ -210,10 +245,10 @@ function openBoard(cfg){
       if(draft.t==='pen'){draft.pts.push(p);gu.innerHTML=`<polyline points="${draft.pts.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ')}" fill="none" stroke="${color}" stroke-width="${sw*U}" stroke-linecap="round" stroke-linejoin="round"/>`}
       else{draft.x1=p[0];draft.y1=p[1];gu.innerHTML=shapeSvg(mk(draft),-1,U,false)}
       return}
-    if(drag.m==='vtx'){const s=shapes[sel];if(s.t==='poly')s.pts[drag.k]=p;else if(s.t==='arrow'){if(drag.k===0){s.x1=p[0];s.y1=p[1]}else{s.x2=p[0];s.y2=p[1]}}redraw();return}
+    if(drag.m==='vtx'){const s=shapes[sel];if(s.t==='poly')s.pts[drag.k]=p;else if(s.t==='cz')s.r=Math.max(4*U,Math.hypot(p[0]-s.cx,p[1]-s.cy));else if(s.t==='arrow'){if(drag.k===0){s.x1=p[0];s.y1=p[1]}else{s.x2=p[0];s.y2=p[1]}}redraw();return}
     if(drag.m==='move'){const dx=p[0]-drag.sx,dy=p[1]-drag.sy;if(Math.hypot(dx,dy)<2*scr()&&!drag.moved)return;drag.moved=true;const s=shapes[sel],o0=drag.orig;
       if(s.t==='poly'||s.t==='pen')s.pts=o0.pts.map(q=>[q[0]+dx,q[1]+dy]);else if(s.t==='arrow'){s.x1=o0.x1+dx;s.y1=o0.y1+dy;s.x2=o0.x2+dx;s.y2=o0.y2+dy}
-      else if(s.t==='ell'){s.cx=o0.cx+dx;s.cy=o0.cy+dy}else{s.x=o0.x+dx;s.y=o0.y+dy}
+      else if(s.t==='ell'||s.t==='cz'){s.cx=o0.cx+dx;s.cy=o0.cy+dy}else{s.x=o0.x+dx;s.y=o0.y+dy}
       redraw();return}
     if(drag.m==='pin'){const d=defectById(drag.id);if(d&&d.loc){const dx=p[0]-drag.sx,dy=p[1]-drag.sy;if(Math.hypot(dx,dy)>(e.pointerType==='touch'?14:5)*scr()||drag.moved){drag.moved=true;d.loc.x=drag.orig.x+dx;d.loc.y=drag.orig.y+dy;redraw()}}return}
   });
@@ -221,6 +256,7 @@ function openBoard(cfg){
     if(d.t==='rect'||(d.t==='zonerect')){const x=Math.min(d.x0,d.x1),y=Math.min(d.y0,d.y1);const ww=Math.abs(d.x1-d.x0),hh=Math.abs(d.y1-d.y0);
       if(photo)return{t:'rect',x,y,w:ww,h:hh,c:color,sw};
       return{t:'poly',pts:[[x,y],[x+ww,y],[x+ww,y+hh],[x,y+hh]],c:color,label:'',ref:false}}
+    if(d.t==='circ')return{t:'cz',cx:d.x0,cy:d.y0,r:Math.max(Math.hypot((d.x1==null?d.x0:d.x1)-d.x0,(d.y1==null?d.y0:d.y1)-d.y0),0),c:color,label:'',ref:false};
     if(d.t==='ell')return{t:'ell',cx:(d.x0+d.x1)/2,cy:(d.y0+d.y1)/2,rx:Math.abs(d.x1-d.x0)/2,ry:Math.abs(d.y1-d.y0)/2,c:color,sw};
     if(d.t==='arrow')return{t:'arrow',x1:d.x0,y1:d.y0,x2:d.x1,y2:d.y1,c:color,sw};
   }
@@ -233,7 +269,8 @@ function openBoard(cfg){
     const dm=drag;drag=null;
     if(dm.m==='draw'&&draft){const d=draft;draft=null;
       if(d.t==='pen'){if(d.pts.length>2){pushUndo();shapes.push({t:'pen',pts:d.pts,c:color,sw});changed();redraw()}else redraw()}
-      else if(d.x1!=null&&Math.hypot(d.x1-d.x0,d.y1-d.y0)>6*U){const s=mk(d);addShape(s);if(s.t==='poly'){setTimeout(()=>{const l=$('#ilabel',o);l&&l.focus()},50)}}
+      else if(d.t==='circ'&&!(d.x1!=null&&Math.hypot(d.x1-d.x0,d.y1-d.y0)>6*U)){const s=mk({...d,x1:d.x0+40*U,y1:d.y0});addShape(s);setTimeout(()=>{const l=$('#ilabel',o);l&&l.focus()},50)}
+      else if(d.x1!=null&&Math.hypot(d.x1-d.x0,d.y1-d.y0)>6*U){const s=mk(d);addShape(s);if(s.t==='poly'||s.t==='cz'){setTimeout(()=>{const l=$('#ilabel',o);l&&l.focus()},50)}}
       else redraw();
       return}
     if(dm.m==='move'||dm.m==='vtx'){if(dm.m==='move'&&!dm.moved)undo.pop();changed();redraw();return}
@@ -245,8 +282,10 @@ function openBoard(cfg){
   /* UI events */
   o.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.tk){symKind=b.dataset.tk;BOARD_SYM.k=symKind;renderInsp();return}
+    if(b.dataset.sk&&shapes[sel]){pushUndo();shapes[sel].k=b.dataset.sk;symKind=b.dataset.sk;BOARD_SYM.k=symKind;changed();redraw();renderInsp();return}
     if(b.dataset.chip){focusPin(b.dataset.chip);cfg.onPinClick&&cfg.onPinClick(b.dataset.chip,redraw);return}
-    if(b.dataset.tool){tool=b.dataset.tool;if(tool!=='zone')draft=null;updateTools();redraw();return}
+    if(b.dataset.tool){tool=b.dataset.tool;if(tool!=='zone')draft=null;if(tool==='sym'||tool==='circ')sel=-1;updateTools();redraw();return}
     if(b.dataset.color){color=b.dataset.color;updateTools();return}
     if(b.dataset.scolor&&shapes[sel]){pushUndo();shapes[sel].c=b.dataset.scolor;changed();redraw();renderInsp();return}
     const a=b.dataset.a;if(!a)return;
@@ -258,22 +297,34 @@ function openBoard(cfg){
     else if(a==='flipx'||a==='flipy'){const ax=a==='flipx'?'x':'y';toast('กำลังกลับด้านแบบ…',1500);Promise.resolve(cfg.onFlip(ax)).then(url=>{if(url){const im=$('#bsvg > image',o);im.setAttribute('href',url)}sel=-1;redraw();renderInsp();toast('กลับด้านแล้ว โซนและหมุดกลับตาม (กดซ้ำเพื่อย้อนกลับ)',3500)}).catch(e=>toast('กลับด้านไม่สำเร็จ: '+((e&&e.message)||e),4500))}
     else if(a==='finish')finishPoly();
     else if(a==='cancel'){draft=null;redraw();renderInsp()}
+    else if(a==='copy'&&shapes[sel]){BOARD_CLIP={shapes:[clone(shapes[sel])],src:shapes};toast('คัดลอกแล้ว — กด “📋 วาง” ได้ทั้งในแบบนี้และแบบอื่น',2500)}
+    else if(a==='copyall'){if(!shapes.length){toast('ยังไม่มีอะไรให้คัดลอก');return}BOARD_CLIP={shapes:clone(shapes),src:shapes};toast(`คัดลอก ${shapes.length} รายการ — ไปที่แบบอื่นแล้วกด “📋 วาง”`,3000)}
+    else if(a==='dup'&&shapes[sel]){pushUndo();const c=clone(shapes[sel]);shapeMove(c,22*U,22*U);shapes.push(c);changed();select(shapes.length-1)}
+    else if(a==='paste')pasteClip();
     else if(a==='del'&&sel>=0){pushUndo();shapes.splice(sel,1);sel=-1;changed();redraw();renderInsp()}
     else if(cfg.onAction)cfg.onAction(a,o,redraw);
   });
   o.addEventListener('input',e=>{const t=e.target,s=shapes[sel];
     if(t.id==='bsw'){sw=+t.value;return}
+    if(t.id==='tsz'){symZ=+t.value/10;BOARD_SYM.z=symZ;return}
     if(t.id==='bsym'){SC=+t.value/100;U=H*SC;$('#bsymv',o).textContent=t.value+'%';cfg.onScale&&cfg.onScale(SC);redraw();return}
     if(!s)return;
     if(t.id==='ilabel'){s.label=t.value;redraw()}
     else if(t.id==='iref'){s.ref=t.checked;redraw()}
     else if(t.id==='itext'){s.s=t.value||' ';redraw()}
     else if(t.id==='ifs'){s.fs=+t.value;redraw()}
+    else if(t.id==='isz'){s.z=+t.value/10;redraw()}
     else if(t.id==='isw'){s.sw=+t.value;redraw()}
     changed();
   });
   o.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'&&e.target.type==='text'){e.target.blur()}else if(e.key==='Delete'&&e.target===document.body&&sel>=0){shapes.splice(sel,1);sel=-1;changed();redraw();renderInsp()}else if(e.key==='Escape'){draft=null;redraw();renderInsp()}});
-  function close(){window.removeEventListener('resize',fit);o.remove();cfg.onClose&&cfg.onClose()}
+  const kd=e=>{if(!o.isConnected||ro)return;const tg=e.target;if(tg&&/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName))return;const m=e.ctrlKey||e.metaKey,k=(e.key||'').toLowerCase();
+    if(m&&k==='c'&&shapes[sel]){BOARD_CLIP={shapes:[clone(shapes[sel])],src:shapes};toast('คัดลอกแล้ว',1200);e.preventDefault()}
+    else if(m&&k==='v'){pasteClip();e.preventDefault()}
+    else if(m&&k==='d'&&shapes[sel]){const c=clone(shapes[sel]);pushUndo();shapeMove(c,22*U,22*U);shapes.push(c);changed();select(shapes.length-1);e.preventDefault()}
+    else if((k==='delete'||k==='backspace')&&sel>=0){pushUndo();shapes.splice(sel,1);sel=-1;changed();redraw();renderInsp();e.preventDefault()}};
+  document.addEventListener('keydown',kd);
+  function close(){document.removeEventListener('keydown',kd);window.removeEventListener('resize',fit);o.remove();cfg.onClose&&cfg.onClose()}
   window.addEventListener('resize',fit);
   updateTools();setTimeout(()=>{fit();redraw()},0);
   if(cfg.pinFor)tool='pin',updateTools();

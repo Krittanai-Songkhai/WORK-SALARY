@@ -164,7 +164,7 @@ function parseKmit(A,sheetName){
     if(hasRooms){ // ITEM แบบตารางห้อง: 1 รายการ BOQ + ห้อง
       const tot=it.lines.reduce((a,l)=>a+l.qty,0);const rates=it.lines.map(l=>l.rate).filter(x=>x>0);
       const key=it.name+(it.spec?` ${it.spec}`:'')+(it.tag||'');
-      out.push({name:key,loc:it.spec,unit:it.lines[0].unit,qty:+tot.toFixed(3),rate:rates[0]||0,bqMapped:true,bq:+tot.toFixed(3),group:it.group,tile:true,note:''});
+      out.push({name:key,loc:it.spec,unit:it.lines[0].unit,qty:+tot.toFixed(6),rate:rates[0]||0,bqMapped:true,bq:+tot.toFixed(6),group:it.group,tile:true,note:''});
       for(const l of it.lines){const fl=floorOf(l)||l.label;
         if(l.rooms.length)l.rooms.forEach(rm=>{const k=fl+'|'+rm.name;let ro=roomMap.get(k);if(!ro){ro={floor:fl,name:rm.type?`${rm.name} ${rm.type}`:rm.name,qtys:{}};roomMap.set(k,ro)}ro.qtys[key]=(ro.qtys[key]||0)+rm.qty});
         else if(l.qty>0){const k=fl+'|all:'+l.label;let ro=roomMap.get(k);if(!ro){ro={floor:fl,name:`${l.label}${l.loc?' ('+l.loc+')':''} (ทั้งชั้น)`,qtys:{}};roomMap.set(k,ro)}ro.qtys[key]=(ro.qtys[key]||0)+l.qty}}
@@ -207,7 +207,7 @@ function importBoqAll(building){
       for(const t of items){const ex=S.boq.find(i=>i.building===x.b&&i.name===t.name&&(i.group||'')===t.group);const v={building:x.b,...t};if(ex){Object.assign(ex,v);save(ex)}else add('boq',Object.assign({note:''},v));n++}
       if(x.fmt==='kmit')for(const rm of x.parsed.rooms){
         let ro=S.rooms.find(r=>r.building===x.b&&(r.floor||'')===rm.floor&&r.name===rm.name);if(!ro)ro=add('rooms',{building:x.b,floor:rm.floor,name:rm.name,qty:{}});ro.qty=ro.qty||{};
-        for(const k in rm.qtys){const it=S.boq.find(i=>i.building===x.b&&i.name===k);if(it)ro.qty[it.id]=+rm.qtys[k].toFixed(3)}save(ro);nr++}}
+        for(const k in rm.qtys){const it=S.boq.find(i=>i.building===x.b&&i.name===k);if(it)ro.qty[it.id]=+rm.qtys[k].toFixed(6)}save(ro);nr++}}
     if(n){toast(`นำเข้า ${n} รายการ${nr?` + ${nr} ห้อง`:''} จาก ${bl.size} อาคารแล้ว`,4000);o.remove();render()}else toast('ไม่มีรายการให้นำเข้า — ตรวจการติ๊กชีต/อาคาร')});
 }
 
