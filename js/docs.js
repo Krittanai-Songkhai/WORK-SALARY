@@ -16,7 +16,7 @@ const DOC_CSS=`
 .dt td.n{text-align:right;font-variant-numeric:tabular-nums}.dt td.c{text-align:center}
 .dt td.cur{background:#e4eefb}.dt th.cur{background:#cfe0f7}
 .dt tr.tot td{font-weight:700;background:#f3f3f3;border-top:2px solid #111}
-.dt tr.fl td{background:#f2efe6;font-weight:700;height:22px}
+.dt tr.fl td{background:#f2efe6;font-weight:700;height:22px}.dt tr.fl2 td{background:#f8f6ef;font-weight:600;height:20px;font-size:10.5px}
 .dt td.warn{color:#b00;font-size:10px}
 .sum{display:flex;justify-content:space-between;align-items:center;border:2px solid #1a3fc4;margin-top:8px;padding:7px 14px;font-size:16px;font-weight:700}
 .sig{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:12px;font-size:11px;text-align:center}.sig div{border-top:1px solid #111;padding-top:4px;margin-top:34px}
@@ -42,14 +42,16 @@ const rowNote=r=>[r.note,r.boq?'':({extra:'งานเพิ่ม',none:''}[r.
 /* --- ชุดแบบรายการ (ตารางเบิกผลงานตามรูปแบบ Excel) --- */
 function linePages(c,k,o){
   o=o||{};
-  const rows=k.rows;const CH=17,LASTMAX=13;const chunks=[];
-  for(let i=0;i<rows.length;i+=CH)chunks.push(rows.slice(i,i+CH));if(!chunks.length)chunks.push([]);
+  const isGrp=f=>String(f||'').length>7;   // ชื่อหมวดยาวๆ (จาก BOQ) แสดงเป็นแถบหัวกลุ่ม แทนที่จะอัดในช่อง “ชั้น”
+  const flat=[];let lg=null;for(const r of k.rows){if(isGrp(r.floor)){if(r.floor!==lg){flat.push({band:r.floor});lg=r.floor}}else lg=null;flat.push({r})}
+  const CH=15,LASTMAX=12;const chunks=[];
+  for(let i=0;i<flat.length;i+=CH)chunks.push(flat.slice(i,i+CH));if(!chunks.length)chunks.push([]);
   let extra=false;if(chunks[chunks.length-1].length>LASTMAX)extra=true;
   const N=chunks.length+(extra?1:0);const pages=[];let lastFl='';
-  const col=`<colgroup><col style="width:48px"><col style="width:210px"><col style="width:66px"><col style="width:40px"><col style="width:60px"><col style="width:88px"><col style="width:66px"><col style="width:84px"><col style="width:66px"><col style="width:88px"><col style="width:92px"><col style="width:56px"><col></colgroup>`;
+  const col=`<colgroup><col style="width:48px"><col style="width:236px"><col style="width:66px"><col style="width:40px"><col style="width:60px"><col style="width:88px"><col style="width:66px"><col style="width:84px"><col style="width:66px"><col style="width:88px"><col style="width:92px"><col style="width:56px"><col></colgroup>`;
   const head=`<thead><tr><th rowspan="2">ชั้น</th><th rowspan="2">รายการ</th><th colspan="4">ราคาจัดจ้าง</th><th colspan="2">งวดก่อนๆ (สะสม)</th><th colspan="2" class="cur">งวดนี้ (ครั้งที่ ${k.no})</th><th colspan="2">รวมเบิกสะสม</th><th rowspan="2">หมายเหตุ</th></tr>
     <tr><th>ปริมาณ</th><th>หน่วย</th><th>ค่าแรง/หน่วย</th><th>บาท</th><th>ปริมาณ</th><th>บาท</th><th class="cur">ปริมาณ</th><th class="cur">บาท</th><th>ยอดเบิกสะสม (บาท)</th><th>% สะสม</th></tr></thead>`;
-  const tr=r=>{const f=r.floor!==lastFl?r.floor:'';lastFl=r.floor;return`<tr><td class="c">${esc(f)}</td><td>${esc(r.name)}</td><td class="n">${fq(r.qty)}</td><td class="c">${esc(r.unit)}</td><td class="n">${f2(r.rate)}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${r.prevAmt?f2(r.prevAmt):'-'}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${r.curAmt?f2(r.curAmt):'-'}</td><td class="n">${r.cumAmt?f2(r.cumAmt):'-'}</td><td class="n">${pct(r.pct)}</td><td class="warn">${esc(rowNote(r))}</td></tr>`};
+  const tr=x=>{if(x.band){lastFl=null;return`<tr class="fl"><td colspan="13">${esc(x.band)}</td></tr>`}const r=x.r;const f=isGrp(r.floor)?'':(r.floor!==lastFl?r.floor:'');lastFl=isGrp(r.floor)?null:r.floor;return`<tr><td class="c">${esc(f)}</td><td>${esc(r.name)}</td><td class="n">${fq(r.qty)}</td><td class="c">${esc(r.unit)}</td><td class="n">${f2(r.rate)}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${r.prevAmt?f2(r.prevAmt):'-'}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${r.curAmt?f2(r.curAmt):'-'}</td><td class="n">${r.cumAmt?f2(r.cumAmt):'-'}</td><td class="n">${pct(r.pct)}</td><td class="warn">${esc(rowNote(r))}</td></tr>`};
   const totRow=`<tr class="tot"><td colspan="2" class="c">รวม</td><td></td><td></td><td></td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="n cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td></td></tr>`;
   const fin=`<div class="sum"><span>${o.sumLabel||'รวมเป็นเงินเบิกผลงาน'} งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${k.missing?`<div style="font-size:10.5px;color:#b00;margin-top:4px">* มี ${k.missing} รายการที่ไม่มี BOQ คลุม (ระบุไว้ในช่องหมายเหตุ)</div>`:''}${o.nosig?'':sigHTML()}`;
   chunks.forEach((ch,i)=>{const lastP=i===chunks.length-1&&!extra;
@@ -85,16 +87,20 @@ function roomPages(c,k){
       parts.push({head:dHead(c,k,ci===0&&pi===0?'ตารางส่งงานรายห้อง (ปริมาณ ตร.ม. ต่อ ITEM)':'ตารางส่งงานรายห้อง (ต่อ)'),html:`<table class="dt">${colg}${head}<tbody>${body}${tot}</tbody></table>`});
     });
   });
-  // หน้าสรุปงบ
+  // หน้าสรุปงบ (แบ่งหน้าเมื่อรายการเยอะ)
   const bc=boqControl(c.building);const bq=id=>bc.find(x=>x.it.id===id);
-  const srows=items.map(it=>{const b=bq(it.boqId);const a=it.cum;return`<tr><td>${esc(it.name)}</td><td class="c">${esc(it.unit)}</td><td class="n">${fq(it.qty)}</td><td class="n">${f2(it.rate)}</td><td class="n">${f2(it.qty*it.rate)}</td><td class="n">${fq(it.prev)}</td><td class="n">${f2(it.prev*it.rate)}</td><td class="n cur">${fq(it.cur)}</td><td class="n cur">${f2(it.cur*it.rate)}</td><td class="n">${f2(a*it.rate)}</td><td class="n">${pct(it.qty?a/it.qty*100:0)}</td><td class="n">${b&&b.qty?fq(b.qty):'-'}</td><td class="n">${b&&b.qty?fq(b.qty-b.alloc):'-'}</td><td class="warn">${b&&b.qty?(b.over?'จัดสรรเกิน BOQ':''):'ไม่มี BOQ คลุม'}</td></tr>`}).join('');
-  const exr=k.rows.filter(r=>r.extra).map(r=>`<tr><td>${esc((r.floor?r.floor+' · ':'')+r.name)}</td><td class="c">${esc(r.unit)}</td><td class="n">${fq(r.qty)}</td><td class="n">${f2(r.rate)}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${f2(r.prevAmt)}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${f2(r.curAmt)}</td><td class="n">${f2(r.cumAmt)}</td><td class="n">${pct(r.pct)}</td><td class="n">-</td><td class="n">-</td><td class="warn">${esc(rowNote(r))}</td></tr>`).join('');
-  const sumPage=`<table class="dt"><colgroup><col style="width:170px"><col style="width:44px"><col style="width:66px"><col style="width:58px"><col style="width:86px"><col style="width:66px"><col style="width:84px"><col style="width:66px"><col style="width:86px"><col style="width:88px"><col style="width:54px"><col style="width:66px"><col style="width:66px"><col></colgroup>
-    <thead><tr><th rowspan="2">ITEM</th><th rowspan="2">หน่วย</th><th colspan="3">ราคาจัดจ้าง (ห้องที่ได้รับ)</th><th colspan="2">สะสมก่อน</th><th colspan="2" class="cur">งวดนี้</th><th colspan="2">รวมเบิกสะสม</th><th colspan="2">เทียบ BOQ</th><th rowspan="2">หมายเหตุ</th></tr>
-    <tr><th>ปริมาณ</th><th>ค่าแรง/หน่วย</th><th>บาท</th><th>ปริมาณ</th><th>บาท</th><th class="cur">ปริมาณ</th><th class="cur">บาท</th><th>บาท</th><th>%</th><th>BOQ</th><th>คงเหลือ</th></tr></thead>
-    <tbody>${srows}${exr?`<tr class="fl"><td colspan="14">รายการอื่นๆ นอกตารางห้อง</td></tr>${exr}`:''}<tr class="tot"><td colspan="4" class="c">รวม</td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td colspan="3"></td></tr></tbody></table>
-    <div class="sum"><span>รวมเป็นเงินเบิกผลงาน งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${sigHTML()}`;
-  parts.push({head:dHead(c,k,'สรุปงบเบิกผลงาน (คุมงบตามปริมาณ ตร.ม. ต่อ ITEM)'),html:sumPage});
+  const srow=it=>{const b=bq(it.boqId);const a=it.cum;return`<tr><td>${esc(it.name)}</td><td class="c">${esc(it.unit)}</td><td class="n">${fq(it.qty)}</td><td class="n">${f2(it.rate)}</td><td class="n">${f2(it.qty*it.rate)}</td><td class="n">${fq(it.prev)}</td><td class="n">${f2(it.prev*it.rate)}</td><td class="n cur">${fq(it.cur)}</td><td class="n cur">${f2(it.cur*it.rate)}</td><td class="n">${f2(a*it.rate)}</td><td class="n">${pct(it.qty?a/it.qty*100:0)}</td><td class="n">${b&&b.qty?fq(b.qty):'-'}</td><td class="n">${b&&b.qty?fq(b.qty-b.alloc):'-'}</td><td class="warn">${b&&b.qty?(b.over?'จัดสรรเกิน BOQ':''):'ไม่มี BOQ คลุม'}</td></tr>`};
+  const erow=r=>`<tr><td>${esc(r.name)}</td><td class="c">${esc(r.unit)}</td><td class="n">${fq(r.qty)}</td><td class="n">${f2(r.rate)}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${f2(r.prevAmt)}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${f2(r.curAmt)}</td><td class="n">${f2(r.cumAmt)}</td><td class="n">${pct(r.pct)}</td><td class="n">-</td><td class="n">-</td><td class="warn">${esc(rowNote(r))}</td></tr>`;
+  const exs=k.rows.filter(r=>r.extra);const sflat=[];items.forEach(it=>sflat.push(srow(it)));
+  if(exs.length){sflat.push(`<tr class="fl"><td colspan="14">รายการอื่นๆ นอกตารางห้อง</td></tr>`);let lg=null;exs.forEach(r=>{if(String(r.floor||'').length>7&&r.floor!==lg){sflat.push(`<tr class="fl2"><td colspan="14">${esc(r.floor)}</td></tr>`);lg=r.floor}sflat.push(erow(r))})}
+  const SP=15,SLAST=11;const schunks=[];for(let i=0;i<sflat.length;i+=SP)schunks.push(sflat.slice(i,i+SP));if(!schunks.length)schunks.push([]);
+  if(schunks[schunks.length-1].length>SLAST)schunks.push([]);
+  const scol=`<colgroup><col style="width:230px"><col style="width:44px"><col style="width:64px"><col style="width:56px"><col style="width:84px"><col style="width:64px"><col style="width:82px"><col style="width:64px"><col style="width:84px"><col style="width:86px"><col style="width:54px"><col style="width:64px"><col style="width:64px"><col></colgroup>`;
+  const shead=`<thead><tr><th rowspan="2">ITEM / รายการ</th><th rowspan="2">หน่วย</th><th colspan="3">ราคาจัดจ้าง (ห้องที่ได้รับ)</th><th colspan="2">สะสมก่อน</th><th colspan="2" class="cur">งวดนี้</th><th colspan="2">รวมเบิกสะสม</th><th colspan="2">เทียบ BOQ</th><th rowspan="2">หมายเหตุ</th></tr>
+    <tr><th>ปริมาณ</th><th>ค่าแรง/หน่วย</th><th>บาท</th><th>ปริมาณ</th><th>บาท</th><th class="cur">ปริมาณ</th><th class="cur">บาท</th><th>บาท</th><th>%</th><th>BOQ</th><th>คงเหลือ</th></tr></thead>`;
+  const stot=`<tr class="tot"><td colspan="4" class="c">รวม</td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td colspan="3"></td></tr>`;
+  schunks.forEach((ch,i)=>{const last=i===schunks.length-1;
+    parts.push({head:dHead(c,k,'สรุปงบเบิกผลงาน (คุมงบตามปริมาณ ตร.ม. ต่อ ITEM)'+(i?' (ต่อ)':'')),html:`<table class="dt">${scol}${shead}<tbody>${ch.join('')}${last?stot:''}</tbody></table>${last?`<div class="sum"><span>รวมเป็นเงินเบิกผลงาน งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${sigHTML()}`:''}`})});
   const out=parts.map(p=>`<div class="dp">${p.head}${p.html}${dFoot(c,k)}</div>`);
   const ek=extraK(k);if(ek)out.splice(out.length-1,0,...linePages(c,ek,{title:'รายการอื่นๆ นอกตารางห้อง',sumLabel:'รวมรายการอื่นๆ',nosig:true}));
   return out;

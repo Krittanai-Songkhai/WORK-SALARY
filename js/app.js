@@ -126,6 +126,9 @@ const ACT={
         from.forEach(r=>{let nm=r.name;if(src&&nm.startsWith(src))nm=f+nm.slice(src.length);add('rooms',{building:b,floor:f,name:nm,qty:{...(r.qty||{})}});n++})});
       o.remove();toast(`คัดลอก ${n} ห้อง${skip.length?' · ข้ามชั้นที่มีห้องแล้ว: '+skip.join(','):''}`,4000);render()});
   },
+  rselnone(){UI.rsel.clear();render()},
+  delrooms(el){const ids=[...UI.rsel].filter(id=>by('rooms',id));if(!ids.length){toast('ยังไม่ได้เลือกห้อง');return}
+    armBtn(el,`กดอีกครั้งเพื่อลบ ${ids.length} ห้อง`,()=>{const set=new Set(ids);S.crews.forEach(c=>{if((c.roomIds||[]).some(i=>set.has(i))){c.roomIds=c.roomIds.filter(i=>!set.has(i));save(c)}});ids.forEach(id=>del('rooms',id));UI.rsel.clear();toast(`ลบ ${ids.length} ห้องแล้ว`);render()})},
   newroom(){const b=UI.b||S.project.buildings[0];const last=S.rooms.filter(r=>r.building===b).slice(-1)[0];add('rooms',{building:b,floor:last?last.floor:'1',name:'',qty:{}});render()},
   newitem(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:'งานกระเบื้อง',name:'ITEM ใหม่',unit:'ตร.ม.',qty:0,rate:0,note:'',tile:true});render()},
   delroom(el){armBtn(el,'ลบ?',()=>{S.crews.forEach(c=>{if((c.roomIds||[]).includes(el.dataset.id)){c.roomIds=c.roomIds.filter(x=>x!==el.dataset.id);save(c)}});del('rooms',el.dataset.id);render()})},
@@ -205,6 +208,9 @@ document.addEventListener('change',async e=>{
   if(d.pr!==undefined||d.pf!==undefined||d.pall!==undefined){const s=curSub();if(!s)return;const k=calcCrew(by('crews',s.crewId),s.no);const p=num(t.value);if(t.value==='')return;
     const sel=d.pr!==undefined?(r=>r.roomId===d.pr):d.pf!==undefined?(r=>(r.floor||'')===d.pf&&r.roomId):(r=>r.roomId);
     k.rows.filter(sel).forEach(r=>setSubEntry(s,r.key,+(r.qty*p/100).toFixed(4)));toast(`ใส่ ${p}% แล้ว`);render();return}
+  if(d.rs!==undefined){t.checked?UI.rsel.add(d.rs):UI.rsel.delete(d.rs);const tr=t.closest('tr');if(tr)tr.classList.toggle('selrow',t.checked);const bt=$('#delrooms');if(bt)bt.textContent=`ลบที่เลือก (${UI.rsel.size})`;return}
+  if(d.rsall!==undefined){const b=UI.b||S.project.buildings[0];S.rooms.filter(r=>r.building===b).forEach(r=>t.checked?UI.rsel.add(r.id):UI.rsel.delete(r.id));render();return}
+  if(t.id==='rsf'){if(t.value===''&&t.selectedIndex===0)return;const b=UI.b||S.project.buildings[0];S.rooms.filter(r=>r.building===b&&(r.floor||'')===t.value).forEach(r=>UI.rsel.add(r.id));render();return}
   if(d.rf!==undefined){const c=by('crews',UI.crew);const ids=S.rooms.filter(r=>r.building===c.building&&(r.floor||'')===d.rf).map(r=>r.id);const s=new Set(c.roomIds||[]);ids.forEach(i=>t.checked?s.add(i):s.delete(i));c.roomIds=[...s];save(c);render();return}
 });
 window.addEventListener('beforeunload',()=>{persist()});

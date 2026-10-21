@@ -3,20 +3,38 @@ const UI={tab:'home',b:'',kind:'',crew:null,sub:null,q:''};
 const bOpts=(sel,all)=>(all?`<option value="" ${sel===''?'selected':''}>${all}</option>`:'')+S.project.buildings.map(b=>`<option ${b===sel?'selected':''}>${esc(b)}</option>`).join('');
 const kindOpts=(sel,all)=>(all?`<option value="">${all}</option>`:'')+Object.keys(KIND).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${KIND[k]}</option>`).join('');
 const bar=p=>`<div class="pbar"><i style="width:${Math.min(100,Math.max(0,p))}%"></i></div>`;
-const TABS=[['home','ภาพรวม'],['crews','ชุดช่าง'],['boq','BOQ'],['rooms','ตารางห้อง'],['plans','แบบ'],['set','ตั้งค่า']];
+const TABS=[['home','ภาพรวม','ภาพรวม'],['crews','ชุดช่าง','ชุดช่าง'],['boq','BOQ','BOQ'],['rooms','ตารางห้อง','ห้อง'],['plans','แบบ','แบบ'],['set','ตั้งค่า','ตั้งค่า']];
+const TABIC={
+ home:'<svg viewBox="0 0 24 24"><path d="M4 11l8-6.500 8 6.500v8.500a1.500 1.500 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 4 19.500z"/><path d="M10 21v-6h4v6"/></svg>',
+ crews:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8.500" r="3.200"/><path d="M3 20c0-3.300 2.700-5.500 6-5.500s6 2.200 6 5.500"/><circle cx="17.500" cy="9.500" r="2.500"/><path d="M17 14.500c2.500 0 4 1.700 4 4.500"/></svg>',
+ boq:'<svg viewBox="0 0 24 24"><rect x="5" y="3.500" width="14" height="17" rx="2.500"/><path d="M8.500 8.500h7M8.500 12h7M8.500 15.500h4"/></svg>',
+ rooms:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg>',
+ plans:'<svg viewBox="0 0 24 24"><path d="M3.500 7.500L9 5l6 2.500L20.500 5v11.500L15 19l-6-2.500-5.500 2.500z"/><path d="M9 5v11.500M15 7.500V19"/></svg>',
+ set:'<svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.200"/><circle cx="9" cy="17" r="2.200"/></svg>'};
 
 function viewTop(){
   return`${S.project.logoId&&imgSrc(S.project.logoId)?`<img class="tlogo" src="${imgSrc(S.project.logoId)}" alt="">`:''}<div class="brand"><b>Work Desk</b><span>${esc(S.project.name)} · ส่งงาน / เบิกผลงาน</span></div>
-   <div class="nav">${TABS.map(t=>`<button data-act="tab" data-v="${t[0]}" aria-current="${UI.tab===t[0]&&!UI.crew}">${t[1]}</button>`).join('')}</div><span id="sync">${statusHTML()}</span>`;
+   <div class="nav">${TABS.map(t=>`<button data-act="tab" data-v="${t[0]}" aria-label="${t[1]}" aria-current="${UI.tab===t[0]&&!UI.crew}"><i class="ic">${TABIC[t[0]]}</i><span class="lb l">${t[1]}</span><span class="lb s">${t[2]}</span></button>`).join('')}</div><span id="sync">${statusHTML()}</span>`;
 }
 
 /* ---- ภาพรวม ---- */
+/* หน้าแรกแบบแอปมือถือ (เฉพาะจอเล็ก) */
+function mhome(act,T){
+  const pct=T.amt?Math.min(100,Math.round(T.cum/T.amt*100)):0,C=2*Math.PI*34,off=C*(1-pct/100);
+  const who=(MODE&&MODE.email||'').split('@')[0]||(S.project.name||'W');
+  const qa=(ic,t,attr)=>`<button class="mh-qa" ${attr}><i class="ic">${ic}</i><span>${t}</span></button>`;
+  return`<div class="mhome">
+   <div class="mh-top"><div class="mh-av">${esc(String(who).charAt(0).toUpperCase())}</div><div class="mh-who"><small>โครงการ</small><b>${esc(S.project.name||'')}</b></div><button class="mh-bell" data-act="tab" data-v="set" aria-label="ตั้งค่า">${TABIC.set}</button></div>
+   <div class="mh-hero"><div class="mh-hl"><span>เบิกสะสม (บาท)</span><b class="mh-big">${f2(T.cum)}</b><small>จากมูลค่าสัญญา ${f2(T.amt)} · งวดล่าสุด ${f2(T.cur)} · ${act.length} ชุด</small><button class="mh-cta" data-act="bpdf">สรุปรวม PDF</button></div>
+    <svg class="mh-ring" viewBox="0 0 84 84"><circle cx="42" cy="42" r="34" class="bg"/><circle cx="42" cy="42" r="34" class="fg" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 42 42)"/><text x="42" y="40" text-anchor="middle" class="n">${pct}%</text><text x="42" y="55" text-anchor="middle" class="t">คืบหน้า</text></svg></div>
+   <div class="mh-qas">${qa(TABIC.crews,'ชุดช่าง','data-act="tab" data-v="crews"')}${qa(TABIC.boq,'BOQ','data-act="tab" data-v="boq"')}${qa(TABIC.rooms,'ตารางห้อง','data-act="tab" data-v="rooms"')}${qa(TABIC.plans,'แบบ','data-act="tab" data-v="plans"')}</div>
+   <h2 class="mh-sec">ชุดช่างทั้งหมด</h2></div>`}
 function viewHome(){
   const cs=S.crews.filter(c=>(!UI.b||c.building===UI.b)&&(!UI.kind||c.kind===UI.kind));
   const act=cs.filter(c=>!c.skip);const ks=act.map(c=>({c,k:calcCrew(c)}));
   const T=ks.reduce((a,x)=>({amt:a.amt+x.k.T.amt,cum:a.cum+x.k.T.cumAmt,cur:a.cur+x.k.T.curAmt}),{amt:0,cum:0,cur:0});
   const noRows=act.filter(c=>!crewRows(c).length).length;const miss=unlinkedCount();
-  let h=`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto">ภาพรวมส่งงาน / เบิกผลงาน</h1>
+  let h=mhome(act,T)+`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto" class="mh-hide">ภาพรวมส่งงาน / เบิกผลงาน</h1>
    <select id="fb" style="width:auto">${bOpts(UI.b,'ทุกอาคาร')}</select><select id="fk" style="width:auto">${kindOpts(UI.kind,'ทุกประเภท')}</select>
    <button class="btn pri" data-act="bpdf">สรุปรวม PDF</button><button class="btn" data-act="zipcrews">ส่งออกแยกชุด (ZIP)</button><button class="btn" data-act="bxls">Excel</button></div>
    <div class="stats"><div><b>${act.length}</b><span>ชุดที่ใช้งาน</span></div><div><b class="mono">${f2(T.amt)}</b><span>มูลค่าสัญญารวม (บาท)</span></div><div><b class="mono" style="color:var(--good)">${f2(T.cum)}</b><span>เบิกสะสม (บาท)</span></div><div><b class="mono">${pct(T.amt?T.cum/T.amt*100:0)}</b><span>ความคืบหน้า</span></div>
@@ -115,7 +133,7 @@ const subStats=k=>`<div><b class="mono">${f2(k.T.amt)}</b><span>มูลค่�
 
 /* ---- BOQ ---- */
 const NOGRP='(ไม่ระบุหมวด)';
-UI.bg='';UI.bcol=new Set();UI.bq='';
+UI.rsel=new Set();UI.bg='';UI.bcol=new Set();UI.bq='';
 function viewBoq(){
   const b=UI.b||S.project.buildings[0];const idx=new Map(S.boq.map((x,i)=>[x.id,i]));
   let cs=boqControl(b).sort((a,z)=>idx.get(a.it.id)-idx.get(z.it.id));
@@ -152,10 +170,11 @@ function viewRooms(){
   const tot=it=>rooms.reduce((a,r)=>a+num((r.qty||{})[it.id]),0);
   let h=`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto">ตารางห้อง · ปริมาณ ตร.ม. ต่อ ITEM</h1><select id="fb" style="width:auto">${bOpts(b)}</select><button class="btn" data-act="impRooms">นำเข้า Excel</button><button class="btn" data-act="newitem">＋ ITEM</button><button class="btn" data-act="bulkrooms">＋ หลายห้อง/หลายชั้น</button><button class="btn" data-act="copyfloor">⧉ คัดลอกชั้น</button><button class="btn pri" data-act="newroom">＋ ห้อง</button></div>
    <p class="hint">ทางลัด: ก๊อปช่วงเซลล์จาก Excel แล้ววาง (Ctrl+V) ลงช่องในตารางได้เลย (วางเกินแถวสุดท้ายจะสร้างห้องใหม่ให้) · “＋ หลายห้อง/หลายชั้น” สร้างห้องทุกชั้นทีเดียว · “คัดลอกชั้น” ทำชั้น 2-7 ให้เหมือนชั้น 1<br>ปริมาณของแต่ละห้อง/ITEM ใช้เป็นตัวคุมงบ: ผลรวมเทียบกับ BOQ ด้านล่างตาราง แล้วเลือกห้องให้แต่ละชุดในหน้าชุดช่าง</p>
-   ${its.length?`<div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="width:70px">ชั้น</th><th style="min-width:150px">ห้อง</th>${its.map(i=>`<th style="min-width:100px">${esc(i.name)}<div class="small muted">${esc(i.unit||'')}</div></th>`).join('')}<th></th></tr></thead><tbody>
-   ${rooms.map(r=>`<tr><td><input type="text" data-rm2="${r.id}:floor" value="${esc(r.floor||'')}"></td><td><input type="text" data-rm2="${r.id}:name" value="${esc(r.name)}"></td>${its.map(i=>`<td><input type="number" step="any" data-r="${r.id}:${i.id}" value="${(r.qty||{})[i.id]||''}"></td>`).join('')}<td><button class="btn sm bad" data-act="delroom" data-id="${r.id}">ลบ</button></td></tr>`).join('')||`<tr><td colspan="${3+its.length}" class="empty small">ยังไม่มีห้อง</td></tr>`}</tbody>
-   <tfoot><tr><td colspan="2" class="r"><b>รวมตามห้อง</b></td>${its.map(i=>`<td class="mono" data-rt="${i.id}"><b>${fq(tot(i))}</b></td>`).join('')}<td></td></tr>
-   <tr><td colspan="2" class="r"><b>BOQ</b></td>${its.map(i=>`<td class="mono ${i.qty&&Math.abs(tot(i)-i.qty)>.5?'warnt':''}">${i.qty?fq(i.qty):'<span class="chip warn">ไม่มี BOQ</span>'}</td>`).join('')}<td></td></tr></tfoot></table></div>`
+   ${rooms.length?`<div class="row" style="margin:6px 0 8px" id="rselbar"><label class="small row" style="gap:4px">เลือกทั้งชั้น <select id="rsf" style="width:auto"><option value="">— ชั้น —</option>${[...new Set(rooms.map(r=>r.floor||''))].map(f=>`<option value="${esc(f)}">${esc(f||'-')}</option>`).join('')}</select></label><button class="btn sm" data-act="rselnone">ล้างที่เลือก</button><button class="btn sm bad" data-act="delrooms" id="delrooms">ลบที่เลือก (${UI.rsel.size})</button><span class="small muted">ติ๊กหลายห้อง (หรือเลือกทั้งชั้น) แล้วกดลบทีเดียว</span></div>`:''}
+   ${its.length?`<div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="width:34px"><input type="checkbox" data-rsall="1" title="เลือกทุกห้องที่แสดง" ${rooms.length&&rooms.every(r=>UI.rsel.has(r.id))?'checked':''}></th><th style="width:70px">ชั้น</th><th style="min-width:150px">ห้อง</th>${its.map(i=>`<th style="min-width:100px">${esc(i.name)}<div class="small muted">${esc(i.unit||'')}</div></th>`).join('')}<th></th></tr></thead><tbody>
+   ${rooms.map(r=>`<tr class="${UI.rsel.has(r.id)?'selrow':''}"><td><input type="checkbox" data-rs="${r.id}" ${UI.rsel.has(r.id)?'checked':''}></td><td><input type="text" data-rm2="${r.id}:floor" value="${esc(r.floor||'')}"></td><td><input type="text" data-rm2="${r.id}:name" value="${esc(r.name)}"></td>${its.map(i=>`<td><input type="number" step="any" data-r="${r.id}:${i.id}" value="${(r.qty||{})[i.id]||''}"></td>`).join('')}<td><button class="btn sm bad" data-act="delroom" data-id="${r.id}">ลบ</button></td></tr>`).join('')||`<tr><td colspan="${4+its.length}" class="empty small">ยังไม่มีห้อง</td></tr>`}</tbody>
+   <tfoot><tr><td colspan="3" class="r"><b>รวมตามห้อง</b></td>${its.map(i=>`<td class="mono" data-rt="${i.id}"><b>${fq(tot(i))}</b></td>`).join('')}<td></td></tr>
+   <tr><td colspan="3" class="r"><b>BOQ</b></td>${its.map(i=>`<td class="mono ${i.qty&&Math.abs(tot(i)-i.qty)>.5?'warnt':''}">${i.qty?fq(i.qty):'<span class="chip warn">ไม่มี BOQ</span>'}</td>`).join('')}<td></td></tr></tfoot></table></div>`
    :'<div class="empty">ยังไม่มี ITEM / ห้อง — กด “นำเข้า Excel” หรือ “＋ ITEM” แล้ว “＋ ห้อง”</div>'}`;
   return h;
 }
@@ -181,7 +200,8 @@ function viewSet(){
    <div class="panel"><h3>โลโก้บริษัท <span class="small muted" style="font-weight:400">แสดงมุมซ้ายของเอกสารทุกใบและแถบด้านบน</span></h3><div class="row">${P.logoId&&imgSrc(P.logoId)?`<img src="${imgSrc(P.logoId)}" style="height:56px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px">`:'<span class="muted small">ยังไม่มีโลโก้</span>'}<label class="btn" for="logof">${P.logoId?'เปลี่ยนโลโก้':'อัปโหลดโลโก้'}</label><input id="logof" type="file" accept="image/*" hidden>${P.logoId?'<button class="btn bad sm" data-act="dellogo">ลบ</button>':''}</div></div>
    <div class="panel"><h3>ระบบออนไลน์ (Supabase)</h3><div class="row"><span id="sync2">${statusHTML()}</span>${MODE.kind==='cloud'?`<span class="small">เข้าสู่ระบบ: ${esc(MODE.email)}</span><button class="btn sm" data-act="syncnow">ซิงก์ตอนนี้</button><button class="btn sm" data-act="logout">ออกจากระบบ</button>`:cloudOn()?'<button class="btn pri sm" data-act="login">เข้าสู่ระบบ</button><span class="small muted">ตอนนี้เก็บเฉพาะในเครื่องนี้</span>':'<span class="small muted">ยังไม่ได้ตั้งค่า config.js — เก็บในเครื่องนี้</span>'}</div>
     ${MODE.kind==='cloud'?`<p class="hint" style="margin-top:8px">ข้อมูลเงินถูกตั้งเป็น “เฉพาะสมาชิกที่ล็อกอิน” เจ้าของโครงการ (คนแรกที่ซิงก์) ให้สิทธิ์แก้ไขทีมงานได้ด้านล่าง</p><label class="f">อีเมลผู้ร่วมแก้ไข (คั่นด้วยจุลภาค)<input type="text" id="eds" value="${esc((P.editors||[]).join(', '))}"></label><div class="row" style="margin-top:6px"><button class="btn sm" data-act="saveacl">บันทึกสิทธิ์</button></div>`:''}</div>
-   <div class="panel"><h3>สำรอง / ย้ายข้อมูล</h3><div class="row"><button class="btn" data-act="bkup">ดาวน์โหลดไฟล์สำรอง (JSON)</button><label class="btn" for="bkin">กู้คืนจากไฟล์สำรอง</label><input type="file" id="bkin" accept=".json" hidden><button class="btn" data-act="sample">โหลดข้อมูลตัวอย่าง (BOQ/ห้อง อาคาร D)</button><button class="btn bad" data-act="wipe">ล้างข้อมูลทั้งหมดในเครื่อง</button></div></div>`;
+   <div class="panel"><h3>สำรอง / ย้ายข้อมูล</h3><div class="row"><button class="btn" data-act="bkup">ดาวน์โหลดไฟล์สำรอง (JSON)</button><label class="btn" for="bkin">กู้คืนจากไฟล์สำรอง</label><input type="file" id="bkin" accept=".json" hidden><button class="btn" data-act="sample">โหลดข้อมูลตัวอย่าง (BOQ/ห้อง อาคาร D)</button><button class="btn bad" data-act="wipe">ล้างข้อมูลทั้งหมดในเครื่อง</button></div></div>
+   <div class="credit"><b>Work Desk</b><span>พัฒนาโดย KRITTANAI</span></div>`;
 }
 
 function render(){

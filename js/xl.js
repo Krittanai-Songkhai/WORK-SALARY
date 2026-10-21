@@ -68,9 +68,11 @@ async function xLineSheet(wb,c,k,o){
   ws.getRow(r).height=20;ws.getRow(r+1).height=30;
   H(r,1,r+1,1,'ชั้น');H(r,2,r+1,2,'รายการ');H(r,3,r,6,'ราคาจัดจ้าง');H(r,7,r,8,'งวดก่อนๆ (สะสม)');H(r,9,r,10,`งวดนี้ (ครั้งที่ ${k.no})`,CURH);H(r,11,r,12,'รวมเบิกสะสม');H(r,13,r+1,13,'หมายเหตุ');
   ['ปริมาณ','หน่วย','ค่าแรง/\nหน่วย','บาท','ปริมาณ','บาท'].forEach((t,i)=>H(r+1,3+i,r+1,3+i,t));H(r+1,9,r+1,9,'ปริมาณ',CURH);H(r+1,10,r+1,10,'บาท',CURH);H(r+1,11,r+1,11,'ยอดเบิกสะสม\n(บาท)');H(r+1,12,r+1,12,'% สะสม');
-  r+=2;const first=r;let lastFl=null;
+  r+=2;const first=r;let lastFl=null;const bandRows=new Set();
   for(const x of k.rows){
-    ws.getRow(r).height=30;const f=x.floor!==lastFl?x.floor:'';lastFl=x.floor;const B=X_BOX(X_THIN);
+    const long=String(x.floor||'').length>7;
+    if(long&&x.floor!==lastFl){ws.getRow(r).height=20;xb(ws,r,1,r,n,x.floor,{b:true,fill:'F2EFE6',border:X_BOX(X_THIN)});bandRows.add(r);lastFl=x.floor;r++}
+    ws.getRow(r).height=30;const f=long?'':(x.floor!==lastFl?x.floor:'');if(!long)lastFl=x.floor;const B=X_BOX(X_THIN);
     xb(ws,r,1,r,1,f,{al:'center',border:B});xb(ws,r,2,r,2,x.name,{border:B});xnum(ws,r,3,x.qty,FQ);xb(ws,r,4,r,4,x.unit,{al:'center',border:B});xnum(ws,r,5,x.rate,FM);
     xnum(ws,r,6,{formula:`C${r}*E${r}`,result:x.amt},FM);xnum(ws,r,7,x.prev,FQ);xnum(ws,r,8,{formula:`G${r}*E${r}`,result:x.prevAmt},FM);
     xnum(ws,r,9,x.cur,FQ,{fill:CURF});xnum(ws,r,10,{formula:`I${r}*E${r}`,result:x.curAmt},FM,{fill:CURF});
@@ -130,7 +132,7 @@ async function xRoomSheets(wb,c,k){
   const exr=k.rows.filter(y=>y.extra);
   if(exr.length){xb(w2,q,1,q,14,'รายการอื่นๆ นอกตารางห้อง',{b:true,fill:'F2EFE6',border:X_BOX(X_THIN)});q++;
     for(const it of exr){const B=X_BOX(X_THIN);w2.getRow(q).height=24;
-      xb(w2,q,1,q,1,(it.floor?it.floor+' · ':'')+it.name,{border:B});xb(w2,q,2,q,2,it.unit,{al:'center',border:B});xnum(w2,q,3,it.qty,FQ);xnum(w2,q,4,it.rate,FM);xnum(w2,q,5,{formula:`C${q}*D${q}`,result:it.amt},FM);
+      xb(w2,q,1,q,1,it.name,{border:B});xb(w2,q,2,q,2,it.unit,{al:'center',border:B});xnum(w2,q,3,it.qty,FQ);xnum(w2,q,4,it.rate,FM);xnum(w2,q,5,{formula:`C${q}*D${q}`,result:it.amt},FM);
       xnum(w2,q,6,it.prev,FQ);xnum(w2,q,7,{formula:`F${q}*D${q}`,result:it.prevAmt},FM);xnum(w2,q,8,it.cur,FQ,{fill:CURF});xnum(w2,q,9,{formula:`H${q}*D${q}`,result:it.curAmt},FM,{fill:CURF});
       xnum(w2,q,10,{formula:`(F${q}+H${q})*D${q}`,result:it.cumAmt},FM);xnum(w2,q,11,{formula:`IF(C${q}=0,0,(F${q}+H${q})/C${q})`,result:it.pct/100},FP);
       xnum(w2,q,12,0,FQ);xnum(w2,q,13,0,FQ);xb(w2,q,14,q,14,rowNote(it),{color:'BB0000',fs:9,border:B});q++}}
