@@ -77,7 +77,7 @@ function crewLinePanel(c,k,bo,extra){
   return`<div class="panel"><h3>${extra?'รายการอื่นๆ นอกตารางห้อง':'รายการงาน / ราคาจัดจ้างของชุด'} <span class="small muted" style="font-weight:400">${extra?'(เช่น ปูกระเบื้องทางเดินชั้น 1 — เบิกรวมกับตารางห้อง)':'(ปริมาณ × ค่าแรง/หน่วย = มูลค่าสัญญา)'}</span><span style="margin-left:auto" class="row"><button class="btn sm" data-act="fromboq">＋ เพิ่มจาก BOQ</button><button class="btn sm" data-act="newline">＋ เพิ่มรายการ</button></span></h3>
    <div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="width:70px">ชั้น</th><th>รายการ</th><th style="width:90px">ปริมาณ</th><th style="width:70px">หน่วย</th><th style="width:100px">ค่าแรง/หน่วย</th><th class="r" style="width:110px">บาท</th><th style="width:200px">BOQ ที่คลุม</th><th style="width:170px">หมายเหตุ</th><th></th></tr></thead><tbody>
    ${(c.lines||[]).map(l=>{const b=l.boqId&&cr[l.boqId];const warn=(!b||b.noBoq)?'':b.over?'จัดสรรเกิน BOQ':'';return`<tr><td><input type="text" data-l="${l.id}:floor" value="${esc(l.floor)}"></td><td><input type="text" data-l="${l.id}:name" value="${esc(l.name)}"></td><td><input type="number" step="any" data-l="${l.id}:qty" value="${l.qty}"></td><td><input type="text" data-l="${l.id}:unit" value="${esc(l.unit)}"></td><td><input type="number" step="any" data-l="${l.id}:rate" value="${l.rate}"></td>
-    <td class="r mono" data-amt="${l.id}">${f2(num(l.qty)*num(l.rate))}</td><td><select data-l="${l.id}:boqId">${boOpt(l.boqId)}</select>${warn?`<div class="small" style="color:var(--warn)">${warn}</div>`:''}</td><td><input type="text" data-l="${l.id}:note" value="${esc(l.note||'')}" placeholder="หมายเหตุเพิ่มเติม">${b&&!b.noBoq?'':`<select data-l="${l.id}:nb"><option value="nobq" ${(l.nb||'nobq')==='nobq'?'selected':''}>ไม่มี BOQ คลุม</option><option value="extra" ${l.nb==='extra'?'selected':''}>งานเพิ่ม</option><option value="none" ${l.nb==='none'?'selected':''}>ไม่ใส่หมายเหตุ</option></select>`}</td><td><button class="btn sm bad" data-act="delline" data-id="${l.id}">ลบ</button></td></tr>`}).join('')||`<tr><td colspan="9" class="empty small">ยังไม่มีรายการ</td></tr>`}
+    <td class="r mono" data-amt="${l.id}">${f2(num(l.qty)*num(l.rate))}</td><td><select data-l="${l.id}:boqId">${boOpt(l.boqId)}</select>${num(l.pct)>0?`<div class="small muted">แบ่ง ${num(l.pct)}% ของ BOQ</div>`:''}${warn?`<div class="small" style="color:var(--warn)">${warn}</div>`:''}</td><td><input type="text" data-l="${l.id}:note" value="${esc(l.note||'')}" placeholder="หมายเหตุเพิ่มเติม">${b&&!b.noBoq?'':`<select data-l="${l.id}:nb"><option value="nobq" ${(l.nb||'nobq')==='nobq'?'selected':''}>ไม่มี BOQ คลุม</option><option value="extra" ${l.nb==='extra'?'selected':''}>งานเพิ่ม</option><option value="none" ${l.nb==='none'?'selected':''}>ไม่ใส่หมายเหตุ</option></select>`}</td><td><button class="btn sm bad" data-act="delline" data-id="${l.id}">ลบ</button></td></tr>`}).join('')||`<tr><td colspan="9" class="empty small">ยังไม่มีรายการ</td></tr>`}
    </tbody><tfoot><tr><td colspan="5" class="r"><b>รวมมูลค่าสัญญา</b></td><td class="r mono" id="lntot"><b>${f2(k.T.amt)}</b></td><td colspan="3"></td></tr></tfoot></table></div></div>`;
 }
 function crewRoomPanel(c,bo,extraPanel){
@@ -134,6 +134,11 @@ const subStats=k=>`<div><b class="mono">${f2(k.T.amt)}</b><span>มูลค่�
 /* ---- BOQ ---- */
 const NOGRP='(ไม่ระบุหมวด)';
 UI.rsel=new Set();UI.bg='';UI.bcol=new Set();UI.bq='';
+function splitCell(x){
+  const t=x.it,Q=num(t.qty);const parts=[];
+  S.crews.forEach(c=>(c.lines||[]).forEach(l=>{if(l.boqId===t.id){const p=num(l.pct)>0?num(l.pct):(Q?+(num(l.qty)/Q*100).toFixed(1):0);parts.push({n:c.name,p})}}));
+  const tot=+parts.reduce((a,s)=>a+s.p,0).toFixed(2);
+  return`<button class="btn sm" data-act="splitboq" data-id="${t.id}">÷ แบ่ง %</button>${parts.length?`<div class="small" style="margin-top:4px;line-height:1.5">${parts.map(s=>`${esc(s.n)} <b>${s.p}%</b>`).join('<br>')}${Math.abs(tot-100)>0.01?`<br><span class="${tot>100?'bad':'warnt'}">รวม ${tot}%</span>`:''}</div>`:''}`}
 function viewBoq(){
   const b=UI.b||S.project.buildings[0];const idx=new Map(S.boq.map((x,i)=>[x.id,i]));
   let cs=boqControl(b).sort((a,z)=>idx.get(a.it.id)-idx.get(z.it.id));
@@ -150,16 +155,16 @@ function viewBoq(){
    <div class="row" style="margin:6px 0 10px"><input type="search" id="bsearch" placeholder="ค้นหารายการ / หมวด" value="${esc(UI.bq||'')}" style="max-width:280px"><button class="btn sm" data-act="expall">ขยายทุกหมวด</button><button class="btn sm" data-act="collall">ย่อทุกหมวด</button><span class="small muted" style="margin-left:auto">${cs.length} รายการ · ${groups.length} หมวด</span></div>
    <datalist id="grplist">${groups.filter(g=>g!==NOGRP).map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
    <p class="hint">แยกตามอาคารและหมวดงาน ใช้คุมงบ: ปริมาณ BOQ เทียบกับที่จัดสรรให้ชุดต่างๆ รายการที่ชุดช่างทำแต่ไม่มี BOQ คลุมจะถูกหมายเหตุในเอกสารให้อัตโนมัติ · เปลี่ยนช่อง “หมวด” ท้ายแถวเพื่อย้ายรายการไปหมวดอื่น</p>
-   <div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="min-width:240px">รายการ</th><th style="width:70px">หน่วย</th><th style="width:100px">ปริมาณงาน</th><th style="width:90px">ค่าแรง/หน่วย</th><th style="width:90px">BOQ</th><th style="width:90px">80% BOQ</th><th class="r">จัดสรรให้ชุด</th><th class="r">คงเหลือ</th><th class="r">ปริมาณห้องรวม</th><th class="r">เบิกสะสม</th><th style="width:150px">หมายเหตุ</th><th style="width:130px">หมวด</th><th></th></tr></thead><tbody>`;
+   <div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="min-width:240px">รายการ</th><th style="width:70px">หน่วย</th><th style="width:100px">ปริมาณงาน</th><th style="width:90px">ค่าแรง/หน่วย</th><th style="width:90px">BOQ</th><th style="width:90px">80% BOQ</th><th class="r">จัดสรรให้ชุด</th><th class="r">คงเหลือ</th><th class="r">ปริมาณห้องรวม</th><th class="r">เบิกสะสม</th><th style="min-width:170px">แบ่ง % ให้ชุด</th><th style="width:150px">หมายเหตุ</th><th style="width:130px">หมวด</th><th></th></tr></thead><tbody>`;
   const shown=[];view.forEach(x=>{const g=gname(x);if(!shown.includes(g))shown.push(g)});
   for(const g of shown){
     const st=stat(g);const col=UI.bcol.has(g)&&!q;
-    h+=`<tr class="band"><td colspan="13"><button class="btn sm" data-act="togg" data-g="${esc(g)}" style="margin-right:8px">${col?'▶':'▼'}</button><b>${esc(g)}</b> <span class="small muted" style="font-weight:400">${st.n} รายการ · มูลค่า ${f2(st.amt)} บาท${st.warn?` · <span class="bad">เกิน ${st.warn}</span>`:''}${st.nob?` · <span class="warnt">ไม่มี BOQ ${st.nob}</span>`:''}</span>
+    h+=`<tr class="band"><td colspan="14"><button class="btn sm" data-act="togg" data-g="${esc(g)}" style="margin-right:8px">${col?'▶':'▼'}</button><b>${esc(g)}</b> <span class="small muted" style="font-weight:400">${st.n} รายการ · มูลค่า ${f2(st.amt)} บาท${st.warn?` · <span class="bad">เกิน ${st.warn}</span>`:''}${st.nob?` · <span class="warnt">ไม่มี BOQ ${st.nob}</span>`:''}</span>
       <span style="float:right"><button class="btn sm" data-act="newboqg" data-g="${esc(g===NOGRP?'':g)}">＋ รายการ</button> ${g!==NOGRP?`<button class="btn sm" data-act="rengrp" data-g="${esc(g)}">เปลี่ยนชื่อหมวด</button>`:''}</span></td></tr>`;
     if(col)continue;
     h+=view.filter(x=>gname(x)===g).map(x=>{const t=x.it;return`<tr class="${x.over||x.capOver?'overr':''}"><td><input type="text" data-b="${t.id}:name" value="${esc(t.name)}"></td><td><input type="text" data-b="${t.id}:unit" value="${esc(t.unit||'')}"></td><td><input type="number" step="any" data-b="${t.id}:qty" value="${t.qty||''}"></td><td><input type="number" step="any" data-b="${t.id}:rate" value="${t.rate||''}"></td><td><input type="number" step="any" data-b="${t.id}:bq" value="${t.bq||''}"></td><td><input type="number" step="any" data-b="${t.id}:cap" value="${t.cap||''}"></td>
-    <td class="r mono">${fq(x.alloc)}</td><td class="r mono ${x.remain<0?'bad':''}">${x.qty?fq(x.remain):'-'}</td><td class="r mono ${x.roomTotal&&x.qty&&Math.abs(x.roomTotal-x.qty)>.5?'warnt':''}">${x.roomTotal?fq(x.roomTotal):'-'}</td><td class="r mono">${fq(x.done)}</td><td><input type="text" data-b="${t.id}:note" value="${esc(t.note||'')}">${x.over?'<div class="small bad">จัดสรรเกิน BOQ</div>':''}${x.noBoq?'<div class="small warnt">ไม่มี BOQ คลุม</div>':''}${x.capOver?`<div class="small bad">เกิน 80% BOQ${x.shared?` (รวมรายการที่ใช้ BOQ เดียวกัน ${fq(x.capSum)} / ${fq(x.cap)})`:''}</div>`:''}</td><td><input type="text" list="grplist" data-bg="${t.id}" value="${esc(t.group||'')}" placeholder="หมวด"></td><td><button class="btn sm bad" data-act="delboq" data-id="${t.id}">ลบ</button></td></tr>`}).join('')}
-  if(!shown.length)h+='<tr><td colspan="13" class="empty small">ไม่พบรายการ — นำเข้าจาก Excel หรือเพิ่มเอง</td></tr>';
+    <td class="r mono">${fq(x.alloc)}</td><td class="r mono ${x.remain<0?'bad':''}">${x.qty?fq(x.remain):'-'}</td><td class="r mono ${x.roomTotal&&x.qty&&Math.abs(x.roomTotal-x.qty)>.5?'warnt':''}">${x.roomTotal?fq(x.roomTotal):'-'}</td><td class="r mono">${fq(x.done)}</td><td>${splitCell(x)}</td><td><input type="text" data-b="${t.id}:note" value="${esc(t.note||'')}">${x.over?'<div class="small bad">จัดสรรเกิน BOQ</div>':''}${x.noBoq?'<div class="small warnt">ไม่มี BOQ คลุม</div>':''}${x.capOver?`<div class="small bad">เกิน 80% BOQ${x.shared?` (รวมรายการที่ใช้ BOQ เดียวกัน ${fq(x.capSum)} / ${fq(x.cap)})`:''}</div>`:''}</td><td><input type="text" list="grplist" data-bg="${t.id}" value="${esc(t.group||'')}" placeholder="หมวด"></td><td><button class="btn sm bad" data-act="delboq" data-id="${t.id}">ลบ</button></td></tr>`}).join('')}
+  if(!shown.length)h+='<tr><td colspan="14" class="empty small">ไม่พบรายการ — นำเข้าจาก Excel หรือเพิ่มเอง</td></tr>';
   return h+'</tbody></table></div>';
 }
 
@@ -205,8 +210,13 @@ function viewSet(){
 }
 
 function render(){
+  pageAnim(UI.tab+'|'+(UI.crew||'')+'|'+(UI.sub||''));
   $('#top').innerHTML=viewTop();
   const m=$('#main');const sc=window.scrollY;
   m.innerHTML=UI.sub?viewSub():UI.crew?viewCrew():UI.tab==='crews'?viewCrews():UI.tab==='boq'?viewBoq():UI.tab==='rooms'?viewRooms():UI.tab==='plans'?viewPlans():UI.tab==='set'?viewSet():viewHome();
   window.scrollTo(0,sc);
 }
+
+/* animation เปลี่ยนหน้า: เล่นเฉพาะเมื่อเปลี่ยนหน้า/แท็บ (ไม่เล่นตอนรีเฟรชข้อมูล) */
+let _pgKey='';
+function pageAnim(key){if(key===_pgKey)return;_pgKey=key;const m=document.getElementById('main');if(!m)return;m.classList.remove('pgin');void m.offsetWidth;m.classList.add('pgin');clearTimeout(pageAnim.t);pageAnim.t=setTimeout(()=>m.classList.remove('pgin'),800)}

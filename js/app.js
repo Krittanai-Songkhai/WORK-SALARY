@@ -71,6 +71,7 @@ const ACT={
       if(b.dataset.x==='close'){o.remove();return}
       const ids=$$('input:checked',o).map(i=>i.value);ids.forEach(id=>{const x=ctl.find(y=>y.it.id===id);const t=x.it;newLine(c,{floor:t.group||'',name:t.name,unit:t.unit||'',qty:x.remain>0?+x.remain.toFixed(3):num(t.qty),rate:num(t.rate),boqId:t.id})});o.remove();render()});
   },
+  splitboq(el){splitBoqDlg(el.dataset.id)},
   roomsall(){const c=by('crews',UI.crew);c.roomIds=S.rooms.filter(r=>r.building===c.building).map(r=>r.id);save(c);render()},
   roomsnone(){const c=by('crews',UI.crew);c.roomIds=[];save(c);render()},
   newsub(){const c=by('crews',UI.crew);const s=newSub(c);UI.sub=s.id;render();scrollTo(0,0)},
@@ -161,14 +162,15 @@ const setField=(o,f,v)=>{o[f]=v;save(o)};
 document.addEventListener('input',e=>{
   const t=e.target;if(!t.matches||!t.matches('input[type=text],input[type=number],input[type=date],input[type=search],textarea'))return;const d=t.dataset;
   if(d.c){const c=by('crews',UI.crew);setField(c,d.c,t.value);return}
-  if(d.l){const[id,f]=d.l.split(':');const c=by('crews',UI.crew);const l=c.lines.find(x=>x.id===id);const numF=f==='qty'||f==='rate';l[f]=numF?num(t.value):t.value;save(c);
+  if(d.l){const[id,f]=d.l.split(':');const c=by('crews',UI.crew);const l=c.lines.find(x=>x.id===id);const numF=f==='qty'||f==='rate';l[f]=numF?num(t.value):t.value;if(f==='qty')delete l.pct;save(c);
     if(numF){const a=$(`[data-amt="${id}"]`);if(a)a.textContent=f2(num(l.qty)*num(l.rate));const tot=$('#lntot');if(tot)tot.innerHTML='<b>'+f2(calcCrew(c).T.amt)+'</b>'}return}
   if(d.e!==undefined){const s=curSub();setSubEntry(s,d.e,t.value);refreshSub();return}
   if(d.pe!==undefined){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===d.pe);if(r){setSubEntry(s,r.key,t.value===''?0:+(r.qty*num(t.value)/100).toFixed(4));refreshSub()}return}
   if(d.s){const s=curSub();setField(s,d.s,t.value);return}
   if(d.bg){const o=by('boq',d.bg);o.group=t.value.trim();save(o);return}
   if(t.id==='bsearch'){UI.bq=t.value;const p=t.selectionStart;render();const n=$('#bsearch');if(n){n.focus();n.setSelectionRange(p,p)}return}
-  if(d.b){const[id,f]=d.b.split(':');const o=by('boq',id);o[f]=(f==='qty'||f==='rate')?num(t.value):t.value;save(o);return}
+  if(d.b){const[id,f]=d.b.split(':');const o=by('boq',id);o[f]=(f==='qty'||f==='rate')?num(t.value):t.value;save(o);
+    if(f==='qty')S.crews.forEach(c=>{let ch=false;(c.lines||[]).forEach(l=>{if(l.boqId===id&&num(l.pct)>0){l.qty=+(o.qty*l.pct/100).toFixed(3);ch=true}});if(ch)save(c)});return}
   if(d.rm2){const[id,f]=d.rm2.split(':');setField(by('rooms',id),f,t.value);return}
   if(d.r){const[id,iid]=d.r.split(':');const r=by('rooms',id);r.qty=r.qty||{};const n=num(t.value);if(n)r.qty[iid]=n;else delete r.qty[iid];save(r);
     const tot=$(`[data-rt="${iid}"]`);if(tot)tot.innerHTML='<b>'+fq(S.rooms.filter(x=>x.building===r.building).reduce((a,x)=>a+num((x.qty||{})[iid]),0))+'</b>';return}
@@ -215,3 +217,38 @@ document.addEventListener('change',async e=>{
 });
 window.addEventListener('beforeunload',()=>{persist()});
 (async()=>{await initStore();render()})();
+
+
+/* ===== แบ่งตัด % ของรายการ BOQ ให้ผู้รับเหมา / ช่างแต่ละชุด ===== */
+function splitBoqDlg(id){
+  const it=by('boq',id);if(!it)return;
+  const crews=S.crews.filter(c=>c.building===it.building&&!c.skip).sort((x,y)=>natCmp(x.name,y.name));
+  if(!crews.length){toast('อาคารนี้ยังไม่มีชุดช่าง/ผู้รับเหมา — สร้างชุดก่อน');return}
+  const Q=num(it.qty);if(!(Q>0)){toast('ใส่ปริมาณงานของรายการนี้ก่อน');return}
+  const used=c=>(S.subs||[]).some(s=>s.crewId===c.id&&Object.entries(s.entries||{}).some(([k,v])=>k===(((c.lines||[]).find(l=>l.boqId===id)||{}).id)&&num(v)>0));
+  const st=crews.map(c=>{const l=(c.lines||[]).find(x=>x.boqId===id);const p=l?(num(l.pct)>0?num(l.pct):+(num(l.qty)/Q*100).toFixed(2)):0;return{c,l,pct:p,rate:l?num(l.rate):num(it.rate),locked:!!l&&used(c)}});
+  const o=overlay(`<div class="box wide"><div class="row" style="margin-bottom:6px"><h3 style="margin-right:auto">แบ่งตัด % · ${esc(it.name)}</h3><button class="btn" data-x="close">ปิด</button></div>
+   <p class="hint">ปริมาณงาน BOQ <b>${fq(Q)} ${esc(it.unit||'')}</b> · ใส่ % ให้แต่ละชุด ระบบสร้าง/อัปเดตรายการในชุดนั้นให้ (ปริมาณ = % × BOQ) และถ้าแก้ปริมาณ BOQ ภายหลัง ปริมาณของชุดที่แบ่งด้วย % จะปรับตาม</p>
+   <div class="tblwrap"><table class="grid-t ed"><thead><tr><th>ชุด / ผู้รับเหมา</th><th style="width:90px">%</th><th class="r" style="width:110px">ปริมาณ</th><th style="width:110px">ค่าแรง/หน่วย</th><th class="r" style="width:110px">บาท</th></tr></thead><tbody>
+   ${st.map((x,i)=>`<tr><td>${esc(x.c.name)}<div class="small muted">${x.c.mode==='room'?'แบบห้อง (เข้ารายการนอกตารางห้อง) · ':''}${x.locked?'มีการเบิกแล้ว — ลดเป็น 0% ไม่ได้':''}</div></td><td><input type="number" step="any" min="0" max="100" data-spl="${i}:pct" value="${x.pct||''}" placeholder="0"></td><td class="r mono" id="spq${i}"></td><td><input type="number" step="any" data-spl="${i}:rate" value="${x.rate||''}"></td><td class="r mono" id="spa${i}"></td></tr>`).join('')}</tbody>
+   <tfoot><tr><td class="r"><b>รวม</b></td><td class="mono" id="sptp"></td><td class="r mono" id="sptq"></td><td></td><td class="r mono" id="spta"></td></tr></tfoot></table></div>
+   <div class="row" style="margin-top:10px"><span class="small" id="spmsg" style="margin-right:auto"></span><button class="btn sm" data-x="eq">แบ่งเท่าๆ กัน</button><button class="btn sm" data-x="rest">ที่เหลือใส่ชุดสุดท้ายที่กรอก</button><button class="btn pri" data-x="ok">บันทึก</button></div></div>`,'modal');
+  const calc=()=>{let tp=0,tq=0,ta=0;st.forEach((x,i)=>{const q=+(Q*x.pct/100).toFixed(3);tp+=x.pct;tq+=q;ta+=q*x.rate;$('#spq'+i,o).textContent=x.pct?fq(q):'-';$('#spa'+i,o).textContent=x.pct?f2(q*x.rate):'-'});
+    tp=+tp.toFixed(4);$('#sptp',o).textContent=tp+'%';$('#sptq',o).textContent=fq(tq);$('#spta',o).textContent=f2(ta);
+    const m=$('#spmsg',o);m.className='small '+(tp>100.0001?'bad':tp<99.9999?'warnt':'');m.textContent=tp>100.0001?'รวมเกิน 100% — ต้องแก้ก่อนบันทึก':tp<99.9999?`ยังไม่ได้แบ่ง ${+(100-tp).toFixed(4)}% (เหลือ ${fq(Q*(100-tp)/100)} ${it.unit||''})`:'แบ่งครบ 100%';return tp};
+  const sync=()=>{$$('[data-spl]',o).forEach(inp=>{const[i,f]=inp.dataset.spl.split(':');inp.value=st[+i][f]||''})};
+  calc();
+  o.addEventListener('input',e=>{const t=e.target;if(!t.dataset.spl)return;const[i,f]=t.dataset.spl.split(':');st[+i][f]=num(t.value);calc()});
+  o.addEventListener('click',e=>{const b=e.target.closest('[data-x]');if(!b){if(e.target===o)o.remove();return}
+    const x=b.dataset.x;
+    if(x==='close'){o.remove();return}
+    if(x==='eq'){const act=st.filter(s=>s.pct>0||s.l);const pool=act.length?act:st;const n=pool.length;st.forEach(s=>{if(!pool.includes(s)){if(!s.locked)s.pct=0;return}s.pct=+(100/n).toFixed(2)});sync();calc();return}
+    if(x==='rest'){const lastIdx=st.map((s,i)=>s.pct>0?i:-1).filter(i=>i>=0).pop();if(lastIdx===undefined){return}const others=st.reduce((a,s,i)=>i===lastIdx?a:a+s.pct,0);st[lastIdx].pct=+Math.max(0,100-others).toFixed(2);sync();calc();return}
+    if(x==='ok'){
+      const tp=calc();if(tp>100.0001){toast('รวมเกิน 100%');return}
+      let kept=0;
+      st.forEach(s=>{const q=+(Q*s.pct/100).toFixed(3);
+        if(s.pct>0){if(s.l){Object.assign(s.l,{qty:q,pct:s.pct,rate:s.rate})}else newLine(s.c,{floor:it.group||'',name:it.name,unit:it.unit||'',qty:q,rate:s.rate,boqId:it.id,pct:s.pct});save(s.c)}
+        else if(s.l){if(s.locked){kept++}else{s.c.lines=s.c.lines.filter(l=>l!==s.l);save(s.c)}}});
+      o.remove();toast('แบ่งตัด % แล้ว'+(kept?` (${kept} ชุดมีการเบิกแล้ว คงรายการไว้)`:''),3500);render()}});
+}
