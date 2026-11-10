@@ -97,6 +97,41 @@ function crewRoomPanel(c,bo,extraPanel){
 }
 
 /* ---- บันทึกปริมาณงวด ---- */
+/* ---- งวดงานแบบตารางห้อง: ดูง่าย (การ์ดรายห้อง / ตารางคอลัมน์ติดซ้าย) + ค้นหา/กรอง/พับชั้น ---- */
+UI.sv='';UI.sq='';UI.sfl='all';UI.sfc=new Set();
+function subRoomView(c,k,items,RA,roomsAll,rowOf,exRows,lineTbl){
+  const mode=UI.sv||(window.innerWidth<900?'card':'table');const q=(UI.sq||'').trim().toLowerCase();
+  const stat=r=>{const rs=items.map(it=>rowOf.get(r.id+'~'+it.boqId)).filter(Boolean);return{todo:rs.some(x=>x.cum<x.qty-1e-9),cur:rs.some(x=>x.cur>0),rs}};
+  const rooms=roomsAll.filter(r=>(!q||(r.name+' '+(r.floor||'')).toLowerCase().includes(q))&&(UI.sfl==='all'||(UI.sfl==='todo'?stat(r).todo:stat(r).cur)));
+  const nTodo=roomsAll.filter(r=>stat(r).todo).length,nCur=roomsAll.filter(r=>stat(r).cur).length;
+  const chip=(v,l,n)=>`<button class="chipbtn ${UI.sfl===v?'on':''}" data-act="sfl" data-v="${v}">${l} <small>${n}</small></button>`;
+  let h=`<div class="srbar"><div class="row" style="gap:8px"><button class="btn sm" data-act="fillall">เติมคงเหลือทั้งหมดเป็น “เสร็จ”</button><button class="btn sm" data-act="clearall">ล้างงวดนี้</button><label class="small" style="display:flex;gap:4px;align-items:center">ใส่ % ให้ทุกห้อง <input type="number" step="any" data-pall="1" placeholder="%" style="width:70px"></label>
+    <span style="margin-left:auto" class="row"><button class="chipbtn ${mode==='card'?'on':''}" data-act="svw" data-v="card">รายห้อง</button><button class="chipbtn ${mode==='table'?'on':''}" data-act="svw" data-v="table">ตาราง</button></span></div>
+   <div class="row" style="gap:6px;margin-top:8px"><input type="search" id="sq" placeholder="ค้นหาห้อง เช่น E101" value="${esc(UI.sq||'')}" style="max-width:200px">${chip('all','ทั้งหมด',roomsAll.length)}${chip('todo','ยังไม่เสร็จ',nTodo)}${chip('cur','มีงานงวดนี้',nCur)}<span class="small muted" style="margin-left:auto">กรอกปริมาณที่ทำเสร็จ “ในงวดนี้” (ไม่ใช่สะสม) หรือใส่ % ต่อห้อง/ชั้น/ทั้งหมด</span></div></div>`;
+  if(!rooms.length)return h+'<div class="empty small">ไม่พบห้องตามที่กรอง</div>'+(exRows.length?`<h3 style="margin:14px 0 6px">รายการอื่นๆ นอกตารางห้อง</h3>`+lineTbl(exRows):'');
+  const bar=a=>{const p=a&&a.amt?Math.min(100,a.cumAmt/a.amt*100):0;return`<div class="rbar" title="สะสม ${pct(p)}"><i style="width:${p}%"></i></div>`};
+  const flb=(fl,n)=>`<div class="sfband" data-act="sfc" data-f="${esc(fl||'')}"><span>${UI.sfc.has(fl||'')?'▶':'▼'}</span><b>ชั้น ${esc(fl||'-')}</b><span class="small muted">${n} ห้อง</span><label class="small" style="margin-left:auto;font-weight:400" onclick="event.stopPropagation()">ใส่ % ทั้งชั้น <input type="number" step="any" data-pf="${esc(fl||'')}" placeholder="%" style="width:66px"></label></div>`;
+  if(mode==='card'){
+    let fl=null;
+    for(const r of rooms){
+      if(r.floor!==fl){fl=r.floor;h+=flb(fl,rooms.filter(x=>x.floor===fl).length)}
+      if(UI.sfc.has(fl||''))continue;const a=RA.get(r.id);
+      h+=`<div class="rmc"><div class="rmh"><div><b class="rmn">${esc(r.name)}</b>${bar(a)}</div><div class="r small mono"><div>มูลค่า ${a?f2(a.amt):'-'}</div><div style="color:var(--accent)">งวดนี้ <span data-ra="${r.id}:cur">${a?f2(a.curAmt):'-'}</span></div><div style="color:var(--good)">สะสม <span data-ra="${r.id}:cum">${a?f2(a.cumAmt):'-'}</span></div></div>
+       <div class="nw"><input type="number" step="any" data-pr="${r.id}" placeholder="%" style="width:60px"> <button class="btn sm" data-act="fullroom" data-id="${r.id}">เสร็จ</button></div></div>
+       <div class="rmi">${items.map(it=>{const x=rowOf.get(r.id+'~'+it.boqId);if(!x)return'';return`<div class="rmr"><div class="rmt">${esc(it.name)}<div class="small muted">${fq(x.qty)} ${esc(it.unit)} × ${f2(x.rate)}</div></div><div class="rmp small muted">ก่อน<br><span class="mono" data-c="${x.key}:prev">${x.prev?fq(x.prev):'-'}</span></div><div><input type="number" step="any" data-e="${x.key}" value="${x.cur||''}" placeholder="0" class="${x.over?'bad':''}"></div><div class="rmp small muted">สะสม<br><span class="mono" data-c="${x.key}:cum">${fq(x.cum)}</span> <span data-c="${x.key}:pct">${pct(x.pct)}</span></div></div>`}).join('')}</div></div>`}
+  }else{
+    h+=`<div class="tblwrap stk"><table class="grid-t ed sr"><thead><tr><th>ห้อง</th>${items.map((it,i)=>`<th colspan="3" class="c ig${i%2}">${esc(it.name)}<div class="small muted">${f2(it.rate)} บาท/${esc(it.unit)}</div></th>`).join('')}<th colspan="3" class="c">ราคาต่อห้อง (บาท)</th><th></th></tr><tr><th></th>${items.map((_,i)=>`<th class="r small ig${i%2}">ปริมาณ</th><th class="r small ig${i%2}">ก่อน</th><th class="small ig${i%2}" style="width:92px">งวดนี้</th>`).join('')}<th class="r small">มูลค่า</th><th class="r small">งวดนี้</th><th class="r small">สะสม</th><th></th></tr></thead><tbody>`;
+    let fl=null;
+    for(const r of rooms){
+      if(r.floor!==fl){fl=r.floor;h+=`<tr class="band"><td colspan="${5+items.length*3}" data-act="sfc" data-f="${esc(fl||'')}" style="cursor:pointer">${UI.sfc.has(fl||'')?'▶':'▼'} ชั้น ${esc(fl||'-')} <label class="small" style="margin-left:14px;font-weight:400" onclick="event.stopPropagation()">ใส่ % ทั้งชั้น <input type="number" step="any" data-pf="${esc(fl||'')}" placeholder="%" style="width:70px"></label></td></tr>`}
+      if(UI.sfc.has(fl||''))continue;const a=RA.get(r.id);
+      h+=`<tr><td class="stkc"><b>${esc(r.name)}</b>${bar(a)}</td>${items.map((it,i)=>{const x=rowOf.get(r.id+'~'+it.boqId);return x?`<td class="r mono ig${i%2}">${fq(x.qty)}</td><td class="r mono muted ig${i%2}" data-c="${x.key}:prev">${x.prev?fq(x.prev):'-'}</td><td class="ig${i%2}"><input type="number" step="any" data-e="${x.key}" value="${x.cur||''}" placeholder="0" class="${x.over?'bad':''}"></td>`:`<td class="c muted ig${i%2}">·</td><td class="ig${i%2}"></td><td class="ig${i%2}"></td>`}).join('')}<td class="r mono" data-ra="${r.id}:amt">${a?f2(a.amt):'-'}</td><td class="r mono" data-ra="${r.id}:cur">${a?f2(a.curAmt):'-'}</td><td class="r mono" data-ra="${r.id}:cum">${a?f2(a.cumAmt):'-'}</td><td class="nw"><input type="number" step="any" data-pr="${r.id}" placeholder="%" style="width:60px"> <button class="btn sm" data-act="fullroom" data-id="${r.id}">เสร็จ</button></td></tr>`}
+    h+=`</tbody><tfoot><tr><td><b>รวม</b></td>${items.map(()=>'<td></td><td></td><td></td>').join('')}<td class="r mono" id="ra-amt"><b>${f2(k.T.amt)}</b></td><td class="r mono" id="ra-cur"><b>${f2(k.T.curAmt)}</b></td><td class="r mono" id="ra-cum"><b>${f2(k.T.cumAmt)}</b></td><td></td></tr></tfoot></table></div>`;
+  }
+  if(exRows.length)h+=`<h3 style="margin:14px 0 6px">รายการอื่นๆ นอกตารางห้อง</h3>`+lineTbl(exRows);
+  return h;
+}
+
 function viewSub(){
   const s=by('subs',UI.sub);if(!s){UI.sub=null;return viewCrew()}const c=by('crews',s.crewId);const k=calcCrew(c,s.no);
   let h=`<div class="row" style="margin-bottom:8px"><button class="btn" data-act="backcrew">← ${esc(c.name)}</button><h1 style="font-size:20px;margin-right:auto">งวดที่ ${s.no} · ${esc(c.name)}</h1>
@@ -110,11 +145,8 @@ function viewSub(){
     ${rows.map(r=>`<tr><td>${esc(r.floor)}</td><td>${esc(r.name)}</td><td class="r mono">${fq(r.qty)}</td><td>${esc(r.unit)}</td><td class="r mono">${f2(r.rate)}</td><td class="r mono muted" data-c="${r.key}:prev">${r.prev?fq(r.prev):'-'}</td><td><input type="number" step="any" data-e="${r.key}" value="${r.cur||''}" placeholder="0"></td><td><input type="number" step="any" data-pe="${r.key}" value="${r.qty&&r.cur?+(r.cur/r.qty*100).toFixed(2):''}" placeholder="%" style="width:74px"></td>
      <td class="nw">${[25,50,100].map(p=>`<button class="btn sm" data-act="pctline" data-key="${r.key}" data-p="${p}">${p===100?'เสร็จ':'+'+p+'%'}</button>`).join('')}</td><td class="r mono" data-c="${r.key}:cum">${fq(r.cum)}</td><td class="r mono" data-c="${r.key}:pct">${pct(r.pct)}</td><td class="r mono" data-c="${r.key}:amt">${f2(r.curAmt)}</td><td class="small" style="color:var(--warn)">${esc(rowNote(r))}</td></tr>`).join('')}</tbody></table></div>`;
   if(c.mode==='room'){
-    const items=itemAgg(k);const rooms=roomsOf(c).filter(r=>items.some(it=>k.rows.some(x=>x.key===r.id+'~'+it.boqId)));let fl=null;const rowOf=new Map(k.rows.map(r=>[r.key,r]));
-    h+=`<div class="row" style="margin:8px 0"><button class="btn sm" data-act="fillall">เติมคงเหลือทั้งหมดเป็น “เสร็จ”</button><button class="btn sm" data-act="clearall">ล้างงวดนี้</button><label class="small" style="display:flex;gap:4px;align-items:center">ใส่ % ให้ทุกห้อง <input type="number" step="any" data-pall="1" placeholder="%" style="width:70px"></label><span class="small muted">กรอกปริมาณ ตร.ม. ที่ทำเสร็จในงวดนี้ (ไม่ใช่สะสม) หรือใส่ % ของปริมาณสัญญา ต่อห้อง/ต่อชั้น/ทั้งหมด</span></div>
-     <div class="tblwrap"><table class="grid-t ed"><thead><tr><th>ห้อง</th>${items.map(it=>`<th colspan="3" class="c">${esc(it.name)}<div class="small muted">${f2(it.rate)} บาท/${esc(it.unit)}</div></th>`).join('')}<th></th></tr><tr><th></th>${items.map(()=>'<th class="r small">ปริมาณ</th><th class="r small">ก่อน</th><th class="small" style="width:96px">งวดนี้</th>').join('')}<th></th></tr></thead><tbody>
-     ${rooms.map(r=>{let b='';if(r.floor!==fl){fl=r.floor;b=`<tr class="band"><td colspan="${2+items.length*3}">ชั้น ${esc(fl||'-')} <label class="small" style="margin-left:14px;font-weight:400">ใส่ % ทั้งชั้น <input type="number" step="any" data-pf="${esc(fl||'')}" placeholder="%" style="width:70px"></label></td></tr>`}
-      return b+`<tr><td>${esc(r.name)}</td>${items.map(it=>{const x=rowOf.get(r.id+'~'+it.boqId);return x?`<td class="r mono">${fq(x.qty)}</td><td class="r mono muted" data-c="${x.key}:prev">${x.prev?fq(x.prev):'-'}</td><td><input type="number" step="any" data-e="${x.key}" value="${x.cur||''}" placeholder="0" class="${x.over?'bad':''}"></td>`:'<td class="c muted">·</td><td></td><td></td>'}).join('')}<td class="nw"><input type="number" step="any" data-pr="${r.id}" placeholder="%" style="width:64px"> <button class="btn sm" data-act="fullroom" data-id="${r.id}">เสร็จ</button></td></tr>`}).join('')}</tbody></table></div>${exRows.length?`<h3 style="margin:14px 0 6px">รายการอื่นๆ นอกตารางห้อง</h3>`+lineTbl(exRows):''}`;
+    const items=itemAgg(k);const RA=roomAmounts(k);const rooms=roomsOf(c).filter(r=>items.some(it=>k.rows.some(x=>x.key===r.id+'~'+it.boqId)));let fl=null;const rowOf=new Map(k.rows.map(r=>[r.key,r]));
+    h+=subRoomView(c,k,items,RA,rooms,rowOf,exRows,lineTbl);
   }else{
     h+=`<div class="row" style="margin:8px 0"><button class="btn sm" data-act="fillall">เติมคงเหลือทั้งหมดเป็น “เสร็จ”</button><button class="btn sm" data-act="clearall">ล้างงวดนี้</button><span class="small muted">กรอกปริมาณที่ทำเสร็จในงวดนี้ (ไม่ใช่สะสม) หรือกด % ลัด</span></div>
     ${lineTbl(k.rows)}`;
@@ -139,7 +171,47 @@ function splitCell(x){
   S.crews.forEach(c=>(c.lines||[]).forEach(l=>{if(l.boqId===t.id){const p=num(l.pct)>0?num(l.pct):(Q?+(num(l.qty)/Q*100).toFixed(1):0);parts.push({n:c.name,p})}}));
   const tot=+parts.reduce((a,s)=>a+s.p,0).toFixed(2);
   return`<button class="btn sm" data-act="splitboq" data-id="${t.id}">÷ แบ่ง %</button>${parts.length?`<div class="small" style="margin-top:4px;line-height:1.5">${parts.map(s=>`${esc(s.n)} <b>${s.p}%</b>`).join('<br>')}${Math.abs(tot-100)>0.01?`<br><span class="${tot>100?'bad':'warnt'}">รวม ${tot}%</span>`:''}</div>`:''}`}
+/* ---- ราคาต่อห้อง (รวมทุกงาน) : ปริมาณของห้อง × ค่าแรง/หน่วยใน BOQ ---- */
+UI.bv='boq';UI.rpx=new Set();UI.rpf='';UI.rpq='';
+function roomPricing(b){
+  const items=S.boq.filter(x=>x.building===b);const byId=new Map(items.map(x=>[x.id,x]));
+  const rooms=S.rooms.filter(r=>r.building===b).sort((a,z)=>natCmp(a.floor,z.floor)||natCmp(a.name,z.name));
+  const groups=[];
+  const out=rooms.map(r=>{
+    const lines=[];for(const[id,q]of Object.entries(r.qty||{})){const it=byId.get(id);const n=num(q);if(!it||!(n>0))continue;
+      lines.push({it,group:it.group||NOGRP,qty:n,rate:num(it.rate),amt:n*num(it.rate)})}
+    lines.sort((a,z)=>natCmp(a.group,z.group)||natCmp(a.it.name,z.it.name));
+    const gs=new Map();lines.forEach(l=>{if(!groups.includes(l.group))groups.push(l.group);gs.set(l.group,(gs.get(l.group)||0)+l.amt)});
+    return{room:r,lines,gs,total:lines.reduce((a,l)=>a+l.amt,0),noRate:lines.filter(l=>!l.rate).length}});
+  groups.sort(natCmp);return{rooms:out,groups};
+}
+function viewRoomPrice(b){
+  const P=roomPricing(b);const q=(UI.rpq||'').trim().toLowerCase();
+  const floors=[...new Set(P.rooms.map(x=>x.room.floor||''))];
+  const rs=P.rooms.filter(x=>(!UI.rpf||(x.room.floor||'')===UI.rpf)&&(!q||(x.room.name+' '+(x.room.floor||'')).toLowerCase().includes(q)));
+  const bchips=S.project.buildings.map(x=>`<button class="chipbtn ${x===b?'on':''}" data-act="setb" data-v="${esc(x)}">${esc(x)} <small>${S.rooms.filter(r=>r.building===x).length}</small></button>`).join('');
+  const grand=rs.reduce((a,x)=>a+x.total,0);const nor=rs.filter(x=>x.noRate).length;const ncol=P.groups.length;
+  let h=`<div class="row" style="margin-bottom:8px"><h1 style="font-size:22px;margin-right:auto">BOQ · ราคาต่อห้อง (รวมทุกงาน)</h1><button class="btn" data-act="bview" data-v="boq">← รายการ BOQ</button><button class="btn" data-act="rpxls">Excel</button></div>
+   <div class="chiprow"><span class="small muted">อาคาร</span>${bchips}</div>
+   <div class="row" style="margin:6px 0 10px"><select id="rpf" style="width:auto"><option value="">ทุกชั้น</option>${floors.map(f=>`<option value="${esc(f)}" ${UI.rpf===f?'selected':''}>ชั้น ${esc(f||'-')}</option>`).join('')}</select><input type="search" id="rpq" placeholder="ค้นหาห้อง เช่น E101" value="${esc(UI.rpq||'')}" style="max-width:220px"><button class="btn sm" data-act="rpall">ขยายทุกห้อง</button><button class="btn sm" data-act="rpnone">ย่อทุกห้อง</button></div>
+   <div class="stats"><div><b class="mono">${rs.length}</b><span>ห้อง</span></div><div><b class="mono" style="color:var(--accent)">${f2(grand)}</b><span>รวมมูลค่า (บาท)</span></div><div><b class="mono">${rs.length?f2(grand/rs.length):'-'}</b><span>เฉลี่ยต่อห้อง</span></div><div><b class="mono ${nor?'warnt':''}">${nor}</b><span>ห้องที่มีรายการไม่มีราคา</span></div></div>
+   <p class="hint">ราคา = ปริมาณของห้อง (จากตารางห้อง) × ค่าแรง/หน่วยใน BOQ · งานที่นับเป็นจำนวน (เช่น ช่องสบู่ ช่อง / Floor drain ตัว) ให้เพิ่มเป็น ITEM ในตารางห้อง ตั้งหน่วยและค่าแรง/หน่วยในหน้า BOQ แล้วกรอกจำนวนต่อห้อง · กดชื่อห้องเพื่อดูรายละเอียด</p>`;
+  if(!rs.length)return h+'<div class="empty">ยังไม่มีห้องที่มีปริมาณงาน — เพิ่มในแท็บ “ตารางห้อง”</div>';
+  h+=`<div class="tblwrap"><table class="grid-t"><thead><tr><th>ห้อง</th>${P.groups.map(g=>`<th class="r">${esc(g)}</th>`).join('')}<th class="r">รวมต่อห้อง (บาท)</th></tr></thead><tbody>`;
+  let fl=null;
+  for(const x of rs){const r=x.room;
+    if((r.floor||'')!==fl){fl=r.floor||'';const ft=rs.filter(y=>(y.room.floor||'')===fl).reduce((a,y)=>a+y.total,0);h+=`<tr class="band"><td colspan="${ncol+2}"><b>ชั้น ${esc(fl||'-')}</b> <span class="small muted" style="font-weight:400">รวม ${f2(ft)} บาท</span></td></tr>`}
+    const open=UI.rpx.has(r.id);
+    h+=`<tr class="${x.noRate?'overr':''}"><td><button class="btn sm" data-act="rpx" data-id="${r.id}" style="margin-right:6px">${open?'▼':'▶'}</button><b>${esc(r.name)}</b>${x.noRate?` <span class="small warnt">${x.noRate} รายการไม่มีราคา</span>`:''}</td>${P.groups.map(g=>`<td class="r mono">${x.gs.has(g)?f2(x.gs.get(g)):'-'}</td>`).join('')}<td class="r mono"><b>${f2(x.total)}</b></td></tr>`;
+    if(open)h+=`<tr><td colspan="${ncol+2}" style="padding:6px 12px 12px 40px"><table class="grid-t"><thead><tr><th>รายการ</th><th class="r">ปริมาณ</th><th>หน่วย</th><th class="r">ค่าแรง/หน่วย</th><th class="r">บาท</th></tr></thead><tbody>
+      ${(()=>{let g=null,s='';for(const l of x.lines){if(l.group!==g){g=l.group;s+=`<tr class="band"><td colspan="5"><b>${esc(g)}</b> <span class="small muted" style="font-weight:400">รวม ${f2(x.gs.get(g))} บาท</span></td></tr>`}
+        s+=`<tr><td>${esc(l.it.name)}</td><td class="r mono">${fq(l.qty)}</td><td>${esc(l.it.unit||'')}</td><td class="r mono ${l.rate?'':'warnt'}">${l.rate?f2(l.rate):'ไม่มีราคา'}</td><td class="r mono">${f2(l.amt)}</td></tr>`}return s})()}
+      </tbody><tfoot><tr><td colspan="4" class="r"><b>รวมราคางานต่อห้อง ${esc(r.name)}</b></td><td class="r mono"><b>${f2(x.total)}</b></td></tr></tfoot></table></td></tr>`}
+  h+=`</tbody><tfoot><tr><td><b>รวมทั้งหมด</b></td>${P.groups.map(g=>`<td class="r mono"><b>${f2(rs.reduce((a,x)=>a+(x.gs.get(g)||0),0))}</b></td>`).join('')}<td class="r mono"><b>${f2(grand)}</b></td></tr></tfoot></table></div>`;
+  return h;
+}
 function viewBoq(){
+  if(UI.bv==='room')return viewRoomPrice(UI.b||S.project.buildings[0]);
   const b=UI.b||S.project.buildings[0];const idx=new Map(S.boq.map((x,i)=>[x.id,i]));
   let cs=boqControl(b).sort((a,z)=>idx.get(a.it.id)-idx.get(z.it.id));
   const gname=x=>x.it.group||NOGRP;
@@ -149,7 +221,7 @@ function viewBoq(){
   const stat=g=>{const l=cs.filter(x=>gname(x)===g);return{n:l.length,warn:l.filter(x=>x.over||x.capOver).length,nob:l.filter(x=>x.noBoq).length,amt:l.reduce((a,x)=>a+num(x.it.qty)*num(x.it.rate),0)}};
   const bchips=S.project.buildings.map(x=>`<button class="chipbtn ${x===b?'on':''}" data-act="setb" data-v="${esc(x)}">${esc(x)} <small>${S.boq.filter(i=>i.building===x).length}</small></button>`).join('');
   const gchips=`<button class="chipbtn ${!UI.bg?'on':''}" data-act="bgrp" data-g="">ทุกหมวด <small>${cs.length}</small></button>`+groups.map(g=>{const st=stat(g);return`<button class="chipbtn ${UI.bg===g?'on':''}" data-act="bgrp" data-g="${esc(g)}">${esc(g)} <small>${st.n}</small>${st.warn?'<i class="dot bad"></i>':''}</button>`}).join('');
-  let h=`<div class="row" style="margin-bottom:8px"><h1 style="font-size:22px;margin-right:auto">BOQ ปริมาณงาน</h1><button class="btn" data-act="impboq">นำเข้า Excel</button><button class="btn" data-act="newgrp">＋ หมวดงาน</button><button class="btn pri" data-act="newboq">＋ เพิ่มรายการ</button></div>
+  let h=`<div class="row" style="margin-bottom:8px"><h1 style="font-size:22px;margin-right:auto">BOQ ปริมาณงาน</h1><button class="btn" data-act="bview" data-v="room">ราคาต่อห้อง</button><button class="btn" data-act="impboq">นำเข้า Excel</button><button class="btn" data-act="newgrp">＋ หมวดงาน</button><button class="btn pri" data-act="newboq">＋ เพิ่มรายการ</button></div>
    <div class="chiprow"><span class="small muted">อาคาร</span>${bchips}</div>
    <div class="chiprow"><span class="small muted">หมวดงาน</span>${gchips}</div>
    <div class="row" style="margin:6px 0 10px"><input type="search" id="bsearch" placeholder="ค้นหารายการ / หมวด" value="${esc(UI.bq||'')}" style="max-width:280px"><button class="btn sm" data-act="expall">ขยายทุกหมวด</button><button class="btn sm" data-act="collall">ย่อทุกหมวด</button><span class="small muted" style="margin-left:auto">${cs.length} รายการ · ${groups.length} หมวด</span></div>

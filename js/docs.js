@@ -87,6 +87,13 @@ function roomPages(c,k){
       parts.push({head:dHead(c,k,ci===0&&pi===0?'ตารางส่งงานรายห้อง (ปริมาณ ตร.ม. ต่อ ITEM)':'ตารางส่งงานรายห้อง (ต่อ)'),html:`<table class="dt">${colg}${head}<tbody>${body}${tot}</tbody></table>`});
     });
   });
+  {const RA=[...roomAmounts(k).values()].sort((a,z)=>natCmp(a.floor,z.floor)||natCmp(a.name,z.name));
+   if(RA.length){const flat=[];let fl2=null;for(const a of RA){if(a.floor!==fl2){fl2=a.floor;const ft=RA.filter(y=>y.floor===fl2);flat.push(`<tr class="fl"><td colspan="6">ชั้น ${esc(fl2||'-')} · รวม ${f2(ft.reduce((s,y)=>s+y.amt,0))} บาท</td></tr>`)}
+      flat.push(`<tr><td>${esc(a.name)}</td><td class="n">${f2(a.amt)}</td><td class="n">${f2(a.prevAmt)}</td><td class="n cur">${f2(a.curAmt)}</td><td class="n">${f2(a.cumAmt)}</td><td class="n">${pct(a.amt?a.cumAmt/a.amt*100:0)}</td></tr>`)}
+    const RPG=26,RLAST=22;const rch=[];for(let i=0;i<flat.length;i+=RPG)rch.push(flat.slice(i,i+RPG));if(rch[rch.length-1].length>RLAST)rch.push([]);
+    const sm=RA.reduce((o,a)=>({amt:o.amt+a.amt,prev:o.prev+a.prevAmt,cur:o.cur+a.curAmt,cum:o.cum+a.cumAmt}),{amt:0,prev:0,cur:0,cum:0});
+    rch.forEach((rows,i)=>{const last=i===rch.length-1;
+      parts.push({head:dHead(c,k,i===0?'สรุปราคารายห้อง (บาท)':'สรุปราคารายห้อง (ต่อ)'),html:`<table class="dt"><colgroup><col style="width:200px"><col><col><col><col><col style="width:70px"></colgroup><thead><tr><th>ห้อง / พื้นที่</th><th>มูลค่าสัญญา</th><th>เบิกก่อนหน้า</th><th class="cur">งวดนี้</th><th>สะสม</th><th>% สะสม</th></tr></thead><tbody>${rows.join('')}${last?`<tr class="tot"><td>รวมทุกห้อง</td><td class="n">${f2(sm.amt)}</td><td class="n">${f2(sm.prev)}</td><td class="n cur">${f2(sm.cur)}</td><td class="n">${f2(sm.cum)}</td><td class="n">${pct(sm.amt?sm.cum/sm.amt*100:0)}</td></tr>`:''}</tbody></table>`})})}}
   // หน้าสรุปงบ (แบ่งหน้าเมื่อรายการเยอะ)
   const bc=boqControl(c.building);const bq=id=>bc.find(x=>x.it.id===id);
   const srow=it=>{const b=bq(it.boqId);const a=it.cum;return`<tr><td>${esc(it.name)}</td><td class="c">${esc(it.unit)}</td><td class="n">${fq(it.qty)}</td><td class="n">${f2(it.rate)}</td><td class="n">${f2(it.qty*it.rate)}</td><td class="n">${fq(it.prev)}</td><td class="n">${f2(it.prev*it.rate)}</td><td class="n cur">${fq(it.cur)}</td><td class="n cur">${f2(it.cur*it.rate)}</td><td class="n">${f2(a*it.rate)}</td><td class="n">${pct(it.qty?a/it.qty*100:0)}</td><td class="n">${b&&b.qty?fq(b.qty):'-'}</td><td class="n">${b&&b.qty?fq(b.qty-b.alloc):'-'}</td><td class="warn">${b&&b.qty?(b.over?'จัดสรรเกิน BOQ':''):'ไม่มี BOQ คลุม'}</td></tr>`};

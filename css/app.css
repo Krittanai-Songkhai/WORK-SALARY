@@ -369,3 +369,19 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):focus,select:focus
 @keyframes spn{to{transform:rotate(360deg)}}
 
 .dragon{display:none!important}
+
+/* ---- งวดงานแบบห้อง ---- */
+.srbar{margin:8px 0 10px}
+.rbar{height:5px;border-radius:3px;background:var(--line);margin-top:4px;min-width:70px;overflow:hidden}.rbar i{display:block;height:100%;background:var(--good,#2a9d5c)}
+.sfband{display:flex;gap:8px;align-items:center;padding:8px 12px;margin:10px 0 6px;border-radius:10px;background:var(--accent-soft);color:var(--accent);cursor:pointer;position:sticky;top:0;z-index:2}
+.rmc{border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:8px;overflow:hidden}
+.rmh{display:flex;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}.rmh>div:first-child{flex:1;min-width:110px}.rmn{font-size:16px}
+.rmr{display:grid;grid-template-columns:minmax(0,1fr) 54px 96px 86px;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid var(--line)}.rmr:first-child{border-top:0}.rmt{min-width:0}.rmp{text-align:right}
+.rmr input{width:100%}
+.tblwrap.stk{max-height:72vh}
+.tblwrap.stk thead th{position:sticky;top:0;z-index:3;background:var(--surface)}
+.tblwrap.stk thead tr:nth-child(2) th{top:44px}
+.grid-t.sr .stkc{position:sticky;left:0;z-index:1;background:var(--surface);min-width:96px;box-shadow:1px 0 0 var(--line)}
+.grid-t.sr th:first-child{position:sticky;left:0;z-index:4;background:var(--surface)}
+.grid-t.sr .ig1{background:rgba(127,127,127,.07)}
+@media(max-width:600px){.rmr{grid-template-columns:minmax(0,1fr) 44px 80px 74px;gap:6px;padding:8px}}

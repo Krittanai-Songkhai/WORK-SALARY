@@ -4,6 +4,8 @@ function refreshSub(){
   const s=curSub();if(!s)return;const c=by('crews',s.crewId);const k=calcCrew(c,s.no);
   const st=$('#substats');if(st)st.innerHTML=subStats(k);
   for(const r of k.rows){const set=(f,v)=>{const el=$(`[data-c="${r.key}:${f}"]`);if(el)el.textContent=v};set('cum',fq(r.cum));set('pct',pct(r.pct));set('amt',f2(r.curAmt));set('prev',r.prev?fq(r.prev):'-')}
+  {const RA=roomAmounts(k);RA.forEach(a=>{const sv=(f,v)=>{const el=$(`[data-ra="${a.id}:${f}"]`);if(el)el.textContent=f2(v)};sv('amt',a.amt);sv('cur',a.curAmt);sv('cum',a.cumAmt)});
+   const sf=(id,v)=>{const el=$('#'+id);if(el)el.innerHTML='<b>'+f2(v)+'</b>'};sf('ra-amt',k.T.amt);sf('ra-cur',k.T.curAmt);sf('ra-cum',k.T.cumAmt)}
   $$('input[data-e]').forEach(i=>{const r=k.rows.find(x=>x.key===i.dataset.e);if(r)i.classList.toggle('bad',r.over)});
   $$('input[data-pe]').forEach(i=>{if(i===document.activeElement)return;const r=k.rows.find(x=>x.key===i.dataset.pe);if(r)i.value=r.qty&&r.cur?+(r.cur/r.qty*100).toFixed(2):''});
   $$('input[data-e]').forEach(i=>{if(i===document.activeElement)return;const r=k.rows.find(x=>x.key===i.dataset.e);if(r)i.value=r.cur||''});
@@ -71,6 +73,14 @@ const ACT={
       if(b.dataset.x==='close'){o.remove();return}
       const ids=$$('input:checked',o).map(i=>i.value);ids.forEach(id=>{const x=ctl.find(y=>y.it.id===id);const t=x.it;newLine(c,{floor:t.group||'',name:t.name,unit:t.unit||'',qty:x.remain>0?+x.remain.toFixed(3):num(t.qty),rate:num(t.rate),boqId:t.id})});o.remove();render()});
   },
+  svw(el){UI.sv=el.dataset.v;render()},
+  sfl(el){UI.sfl=el.dataset.v;render()},
+  sfc(el){const f=el.dataset.f;UI.sfc.has(f)?UI.sfc.delete(f):UI.sfc.add(f);render()},
+  bview(el){UI.bv=el.dataset.v;render()},
+  rpx(el){UI.rpx.has(el.dataset.id)?UI.rpx.delete(el.dataset.id):UI.rpx.add(el.dataset.id);render()},
+  rpall(){roomPricing(UI.b||S.project.buildings[0]).rooms.forEach(x=>UI.rpx.add(x.room.id));render()},
+  rpnone(){UI.rpx.clear();render()},
+  rpxls(){exportRoomPriceXlsx(UI.b||S.project.buildings[0])},
   splitboq(el){splitBoqDlg(el.dataset.id)},
   roomsall(){const c=by('crews',UI.crew);c.roomIds=S.rooms.filter(r=>r.building===c.building).map(r=>r.id);save(c);render()},
   roomsnone(){const c=by('crews',UI.crew);c.roomIds=[];save(c);render()},
@@ -168,6 +178,9 @@ document.addEventListener('input',e=>{
   if(d.pe!==undefined){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===d.pe);if(r){setSubEntry(s,r.key,t.value===''?0:+(r.qty*num(t.value)/100).toFixed(4));refreshSub()}return}
   if(d.s){const s=curSub();setField(s,d.s,t.value);return}
   if(d.bg){const o=by('boq',d.bg);o.group=t.value.trim();save(o);return}
+  if(t.id==='sq'){UI.sq=t.value;const p=t.selectionStart;render();const n=$('#sq');if(n){n.focus();n.setSelectionRange(p,p)}return}
+  if(t.id==='rpf'){UI.rpf=t.value;render();return}
+  if(t.id==='rpq'){UI.rpq=t.value;const p=t.selectionStart;render();const n=$('#rpq');if(n){n.focus();n.setSelectionRange(p,p)}return}
   if(t.id==='bsearch'){UI.bq=t.value;const p=t.selectionStart;render();const n=$('#bsearch');if(n){n.focus();n.setSelectionRange(p,p)}return}
   if(d.b){const[id,f]=d.b.split(':');const o=by('boq',id);o[f]=(f==='qty'||f==='rate')?num(t.value):t.value;save(o);
     if(f==='qty')S.crews.forEach(c=>{let ch=false;(c.lines||[]).forEach(l=>{if(l.boqId===id&&num(l.pct)>0){l.qty=+(o.qty*l.pct/100).toFixed(3);ch=true}});if(ch)save(c)});return}
@@ -251,4 +264,24 @@ function splitBoqDlg(id){
         if(s.pct>0){if(s.l){Object.assign(s.l,{qty:q,pct:s.pct,rate:s.rate})}else newLine(s.c,{floor:it.group||'',name:it.name,unit:it.unit||'',qty:q,rate:s.rate,boqId:it.id,pct:s.pct});save(s.c)}
         else if(s.l){if(s.locked){kept++}else{s.c.lines=s.c.lines.filter(l=>l!==s.l);save(s.c)}}});
       o.remove();toast('แบ่งตัด % แล้ว'+(kept?` (${kept} ชุดมีการเบิกแล้ว คงรายการไว้)`:''),3500);render()}});
+}
+
+
+/* ===== Excel: ราคาต่อห้อง (ชีตสรุป + ชีตรายละเอียด) ; ไม่มี ExcelJS → CSV ===== */
+async function exportRoomPriceXlsx(b){
+  const P=roomPricing(b);if(!P.rooms.length){toast('ยังไม่มีห้องที่มีปริมาณงาน');return}
+  const name=safeName(`ราคาต่อห้อง_อาคาร${b}_${todayISO()}`);
+  const sum=[['ชั้น','ห้อง',...P.groups,'รวมต่อห้อง (บาท)'],...P.rooms.map(x=>[x.room.floor||'',x.room.name,...P.groups.map(g=>x.gs.get(g)||0),x.total])];
+  sum.push(['','รวมทั้งหมด',...P.groups.map(g=>P.rooms.reduce((a,x)=>a+(x.gs.get(g)||0),0)),P.rooms.reduce((a,x)=>a+x.total,0)]);
+  const det=[['ชั้น','ห้อง','หมวดงาน','รายการ','ปริมาณ','หน่วย','ค่าแรง/หน่วย','บาท']];
+  P.rooms.forEach(x=>{x.lines.forEach(l=>det.push([x.room.floor||'',x.room.name,l.group,l.it.name,l.qty,l.it.unit||'',l.rate,l.amt]));det.push(['',x.room.name,'','รวมราคางานต่อห้อง','','','',x.total])});
+  try{
+    if(!window.ExcelJS){const csv='\ufeff'+[...sum,[],...det].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');await saveFile(name+'.csv',new Blob([csv],{type:'text/csv'}));toast('ดาวน์โหลดเป็น CSV (ยังโหลดตัวสร้าง Excel ไม่ได้)');return}
+    const wb=new ExcelJS.Workbook();
+    const fill=(ws,rows,numCols,boldLast)=>{rows.forEach((r,i)=>{const row=ws.addRow(r);row.font={name:XF,size:10,bold:i===0||(boldLast&&i===rows.length-1)};if(i===0){row.fill=FILL('E9EEF5');row.alignment={horizontal:'center',wrapText:true}}else numCols.forEach(c=>{row.getCell(c).numFmt=FM})});
+      ws.views=[{state:'frozen',ySplit:1}]};
+    const w1=wb.addWorksheet('สรุปต่อห้อง');fill(w1,sum,sum[0].map((_,i)=>i+1).slice(2),true);w1.getColumn(1).width=8;w1.getColumn(2).width=18;sum[0].slice(2).forEach((_,i)=>w1.getColumn(i+3).width=18);
+    const w2=wb.addWorksheet('รายละเอียด');fill(w2,det,[5,7,8],false);[8,14,22,40,12,10,14,16].forEach((w,i)=>w2.getColumn(i+1).width=w);
+    await saveFile(name+'.xlsx',new Blob([await wb.xlsx.writeBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }catch(e){toast('สร้างไฟล์ไม่สำเร็จ: '+(e.message||e),5000)}
 }

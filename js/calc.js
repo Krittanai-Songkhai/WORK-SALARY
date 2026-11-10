@@ -27,6 +27,10 @@ function calcCrew(c,no){
   return{crew:c,sub:cur||null,no:n,rows,T,subs,missing:rows.filter(needsBoqWarn).length};
 }
 const crewTotal=c=>calcCrew(c).T;
+/* ราคาต่อห้องของชุด (โหมดห้อง): มูลค่าสัญญา / เบิกก่อน / งวดนี้ / สะสม */
+function roomAmounts(k){const m=new Map();
+  for(const r of k.rows){if(!r.roomId)continue;let a=m.get(r.roomId);if(!a){a={id:r.roomId,name:r.room,floor:r.floor,amt:0,prevAmt:0,curAmt:0,cumAmt:0};m.set(r.roomId,a)}a.amt+=r.amt;a.prevAmt+=r.prevAmt;a.curAmt+=r.curAmt;a.cumAmt+=r.cumAmt}
+  return m}
 /* คุมงบเทียบ BOQ ของอาคาร: ปริมาณ BOQ / จัดสรรให้ชุดต่างๆ / ปริมาณห้องรวม / เบิกสะสม */
 function boqControl(b){
   const items=S.boq.filter(x=>!b||x.building===b);
