@@ -78,9 +78,13 @@ const ACT={
   sfc(el){const f=el.dataset.f;UI.sfc.has(f)?UI.sfc.delete(f):UI.sfc.add(f);render()},
   bview(el){UI.bv=el.dataset.v;render()},
   rpx(el){UI.rpx.has(el.dataset.id)?UI.rpx.delete(el.dataset.id):UI.rpx.add(el.dataset.id);render()},
-  rpall(){roomPricing(UI.b||S.project.buildings[0]).rooms.forEach(x=>UI.rpx.add(x.room.id));render()},
+  rpall(){roomPriceData(UI.b||S.project.buildings[0]).P.rooms.forEach(x=>UI.rpx.add(x.room.id));render()},
   rpnone(){UI.rpx.clear();render()},
   rpxls(){exportRoomPriceXlsx(UI.b||S.project.buildings[0])},
+  rpfl(el){const f=el.dataset.v;if(f==='__all')UI.rpfs.clear();else UI.rpfs.has(f)?UI.rpfs.delete(f):UI.rpfs.add(f);render()},
+  rpgp(el){const g=el.dataset.v;if(g==='')UI.rpg.clear();else UI.rpg.has(g)?UI.rpg.delete(g):UI.rpg.add(g);render()},
+  rpvw(el){UI.rpv=el.dataset.v;render()},
+  rppdf(){const b=UI.b||S.project.buildings[0];const pg=roomPricePages(b);if(!pg.length){toast('ไม่มีข้อมูลตามที่เลือก');return}previewDoc(pg,safeName(`ราคาต่อห้อง_อาคาร${b}`))},
   splitboq(el){splitBoqDlg(el.dataset.id)},
   roomsall(){const c=by('crews',UI.crew);c.roomIds=S.rooms.filter(r=>r.building===c.building).map(r=>r.id);save(c);render()},
   roomsnone(){const c=by('crews',UI.crew);c.roomIds=[];save(c);render()},
@@ -179,7 +183,6 @@ document.addEventListener('input',e=>{
   if(d.s){const s=curSub();setField(s,d.s,t.value);return}
   if(d.bg){const o=by('boq',d.bg);o.group=t.value.trim();save(o);return}
   if(t.id==='sq'){UI.sq=t.value;const p=t.selectionStart;render();const n=$('#sq');if(n){n.focus();n.setSelectionRange(p,p)}return}
-  if(t.id==='rpf'){UI.rpf=t.value;render();return}
   if(t.id==='rpq'){UI.rpq=t.value;const p=t.selectionStart;render();const n=$('#rpq');if(n){n.focus();n.setSelectionRange(p,p)}return}
   if(t.id==='bsearch'){UI.bq=t.value;const p=t.selectionStart;render();const n=$('#bsearch');if(n){n.focus();n.setSelectionRange(p,p)}return}
   if(d.b){const[id,f]=d.b.split(':');const o=by('boq',id);o[f]=(f==='qty'||f==='rate')?num(t.value):t.value;save(o);
@@ -269,7 +272,7 @@ function splitBoqDlg(id){
 
 /* ===== Excel: ราคาต่อห้อง (ชีตสรุป + ชีตรายละเอียด) ; ไม่มี ExcelJS → CSV ===== */
 async function exportRoomPriceXlsx(b){
-  const P=roomPricing(b);if(!P.rooms.length){toast('ยังไม่มีห้องที่มีปริมาณงาน');return}
+  const D=roomPriceData(b);const P={rooms:D.rs,groups:UI.rpg.size?D.groups.filter(g=>UI.rpg.has(g)):D.groups};if(!P.rooms.length){toast('ไม่มีข้อมูลตามที่เลือก');return}
   const name=safeName(`ราคาต่อห้อง_อาคาร${b}_${todayISO()}`);
   const sum=[['ชั้น','ห้อง',...P.groups,'รวมต่อห้อง (บาท)'],...P.rooms.map(x=>[x.room.floor||'',x.room.name,...P.groups.map(g=>x.gs.get(g)||0),x.total])];
   sum.push(['','รวมทั้งหมด',...P.groups.map(g=>P.rooms.reduce((a,x)=>a+(x.gs.get(g)||0),0)),P.rooms.reduce((a,x)=>a+x.total,0)]);

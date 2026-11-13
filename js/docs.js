@@ -182,3 +182,31 @@ async function pagesToPdf(pages){
   }
 }
 (function(){const s=document.createElement('style');s.textContent=DOC_CSS+`.ov.full{background:var(--bg);display:flex;flex-direction:column;align-items:stretch;padding:0}.pvbar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}.pvbody{flex:1;overflow:auto;padding:12px}`;document.head.appendChild(s)})();
+
+
+/* --- PDF: ราคาต่อห้อง (ตามชั้น/งานที่เลือก) --- */
+function roomPricePages(b){
+  const D=roomPriceData(b);const rs=D.rs;if(!rs.length)return[];
+  const groups=UI.rpg.size?D.groups.filter(g=>UI.rpg.has(g)):D.groups;const P=S.project;
+  const head=t=>`<table class="dh"><colgroup><col style="width:92px"><col style="width:30%"><col><col style="width:22%"></colgroup>
+   <tr><td rowspan="2" class="lg">${logoHTML()}</td><td class="c">โครงการ : ${esc(P.name)}</td><td class="ttl" rowspan="2" style="font-size:20px">BOQ ราคาต่อห้อง</td><td class="c">Date : ${esc(fmtShort(todayISO()))}</td></tr>
+   <tr><td class="c">อาคาร : <b>${esc(b)}</b></td><td class="c">${esc(fmtDate(todayISO()))}</td></tr></table>
+   <div class="band">${esc(t)}</div><div class="band2"><span>${esc(rpFilterText())}</span></div>`;
+  const foot=`<div class="dpf"><span>${esc(P.name)} · อาคาร ${esc(b)} · ราคาต่อห้อง</span><span>%%P%% / %%N%%</span></div>`;
+  const colg=`<colgroup><col style="width:${groups.length>6?120:160}px">${groups.map(()=>'<col>').join('')}<col style="width:104px"></colgroup>`;
+  const th=`<thead><tr><th>ห้อง / ชั้น</th>${groups.map(g=>`<th>${esc(g)}</th>`).join('')}<th>รวม (บาท)</th></tr></thead>`;
+  const sumG=(list,g)=>list.reduce((a,x)=>a+(x.gs.get(g)||0),0);
+  const flat=[];let fl=null;
+  for(const x of rs){const f=x.room.floor||'';if(f!==fl){fl=f;const F=D.floors.find(y=>y.floor===f);flat.push(`<tr class="fl"><td colspan="${groups.length+2}">ชั้น ${esc(f||'-')} · ${F.n} ห้อง · รวม ${f2(F.total)} บาท</td></tr>`)}
+    flat.push(`<tr><td>${esc(x.room.name)}</td>${groups.map(g=>`<td class="n">${x.gs.has(g)?f2(x.gs.get(g)):'-'}</td>`).join('')}<td class="n"><b>${f2(x.total)}</b></td></tr>`)}
+  const grand=rs.reduce((a,x)=>a+x.total,0);
+  const totRow=`<tr class="tot"><td>รวมทั้งหมด (${rs.length} ห้อง)</td>${groups.map(g=>`<td class="n">${f2(sumG(rs,g))}</td>`).join('')}<td class="n">${f2(grand)}</td></tr>`;
+  const RP=22,LAST=19;const ch=[];
+  if(UI.rpv!=='floor'){for(let i=0;i<flat.length;i+=RP)ch.push(flat.slice(i,i+RP));
+    for(let i=0;i<ch.length-1;i++){const l=ch[i];if(l.length&&/class="fl"/.test(l[l.length-1]))ch[i+1].unshift(l.pop())}
+    if(ch[ch.length-1].length>LAST)ch.push([])}
+  const pages=ch.map((rows,i)=>`<div class="dp">${head(i===0?'ราคางานต่อห้อง (บาท)':'ราคางานต่อห้อง (ต่อ)')}<table class="dt dense">${colg}${th}<tbody>${rows.join('')}${i===ch.length-1?totRow:''}</tbody></table>${foot}</div>`);
+  const frow=D.floors.map(f=>`<tr><td><b>ชั้น ${esc(f.floor||'-')}</b> (${f.n} ห้อง)</td>${groups.map(g=>`<td class="n">${f.gs.has(g)?f2(f.gs.get(g)):'-'}</td>`).join('')}<td class="n"><b>${f2(f.total)}</b></td></tr>`).join('');
+  pages.push(`<div class="dp">${head('สรุปราคารายชั้น (บาท)')}<table class="dt dense">${colg}<thead><tr><th>ชั้น</th>${groups.map(g=>`<th>${esc(g)}</th>`).join('')}<th>รวม (บาท)</th></tr></thead><tbody>${frow}${totRow}</tbody></table>${foot}</div>`);
+  const N=pages.length;return pages.map((h,i)=>h.replace(/%%P%%/g,i+1).replace(/%%N%%/g,N));
+}

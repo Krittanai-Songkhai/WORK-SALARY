@@ -173,41 +173,56 @@ function splitCell(x){
   return`<button class="btn sm" data-act="splitboq" data-id="${t.id}">÷ แบ่ง %</button>${parts.length?`<div class="small" style="margin-top:4px;line-height:1.5">${parts.map(s=>`${esc(s.n)} <b>${s.p}%</b>`).join('<br>')}${Math.abs(tot-100)>0.01?`<br><span class="${tot>100?'bad':'warnt'}">รวม ${tot}%</span>`:''}</div>`:''}`}
 /* ---- ราคาต่อห้อง (รวมทุกงาน) : ปริมาณของห้อง × ค่าแรง/หน่วยใน BOQ ---- */
 UI.bv='boq';UI.rpx=new Set();UI.rpf='';UI.rpq='';
-function roomPricing(b){
+function roomPricing(b,selG){
   const items=S.boq.filter(x=>x.building===b);const byId=new Map(items.map(x=>[x.id,x]));
   const rooms=S.rooms.filter(r=>r.building===b).sort((a,z)=>natCmp(a.floor,z.floor)||natCmp(a.name,z.name));
   const groups=[];
   const out=rooms.map(r=>{
-    const lines=[];for(const[id,q]of Object.entries(r.qty||{})){const it=byId.get(id);const n=num(q);if(!it||!(n>0))continue;
+    const lines=[];for(const[id,q]of Object.entries(r.qty||{})){const it=byId.get(id);const n=num(q);if(!it||!(n>0))continue;if(selG&&selG.size&&!selG.has(it.group||NOGRP))continue;
       lines.push({it,group:it.group||NOGRP,qty:n,rate:num(it.rate),amt:n*num(it.rate)})}
     lines.sort((a,z)=>natCmp(a.group,z.group)||natCmp(a.it.name,z.it.name));
     const gs=new Map();lines.forEach(l=>{if(!groups.includes(l.group))groups.push(l.group);gs.set(l.group,(gs.get(l.group)||0)+l.amt)});
     return{room:r,lines,gs,total:lines.reduce((a,l)=>a+l.amt,0),noRate:lines.filter(l=>!l.rate).length}});
   groups.sort(natCmp);return{rooms:out,groups};
 }
+UI.rpg=new Set();UI.rpfs=new Set();UI.rpv='room';
+/* ข้อมูลราคาต่อห้องตามตัวกรอง: หมวดงานที่เลือก / ชั้นที่เลือก / คำค้นห้อง */
+function roomPriceData(b){
+  const P=roomPricing(b,UI.rpg);const q=(UI.rpq||'').trim().toLowerCase();
+  const allFloors=[...new Set(roomPricing(b).rooms.map(x=>x.room.floor||''))].sort(natCmp);
+  const rs=P.rooms.filter(x=>(!UI.rpfs.size||UI.rpfs.has(x.room.floor||''))&&(!q||(x.room.name+' '+(x.room.floor||'')).toLowerCase().includes(q))&&(!UI.rpg.size||x.lines.length));
+  const fl=new Map();rs.forEach(x=>{const k=x.room.floor||'';let f=fl.get(k);if(!f){f={floor:k,n:0,total:0,gs:new Map()};fl.set(k,f)}f.n++;f.total+=x.total;x.gs.forEach((a,g)=>f.gs.set(g,(f.gs.get(g)||0)+a))});
+  return{P,rs,floors:[...fl.values()].sort((a,z)=>natCmp(a.floor,z.floor)),allFloors,groups:P.groups};
+}
+const rpFilterText=()=>[UI.rpfs.size?'ชั้น '+[...UI.rpfs].sort(natCmp).join(', '):'ทุกชั้น',UI.rpg.size?'งาน: '+[...UI.rpg].join(', '):'ทุกงาน'].join(' · ');
 function viewRoomPrice(b){
-  const P=roomPricing(b);const q=(UI.rpq||'').trim().toLowerCase();
-  const floors=[...new Set(P.rooms.map(x=>x.room.floor||''))];
-  const rs=P.rooms.filter(x=>(!UI.rpf||(x.room.floor||'')===UI.rpf)&&(!q||(x.room.name+' '+(x.room.floor||'')).toLowerCase().includes(q)));
+  const D=roomPriceData(b);const{P,rs,floors}=D;
+  const allG=roomPricing(b).groups;const groups=UI.rpg.size?allG.filter(g=>UI.rpg.has(g)):allG;
   const bchips=S.project.buildings.map(x=>`<button class="chipbtn ${x===b?'on':''}" data-act="setb" data-v="${esc(x)}">${esc(x)} <small>${S.rooms.filter(r=>r.building===x).length}</small></button>`).join('');
-  const grand=rs.reduce((a,x)=>a+x.total,0);const nor=rs.filter(x=>x.noRate).length;const ncol=P.groups.length;
-  let h=`<div class="row" style="margin-bottom:8px"><h1 style="font-size:22px;margin-right:auto">BOQ · ราคาต่อห้อง (รวมทุกงาน)</h1><button class="btn" data-act="bview" data-v="boq">← รายการ BOQ</button><button class="btn" data-act="rpxls">Excel</button></div>
+  const grand=rs.reduce((a,x)=>a+x.total,0);const nor=rs.filter(x=>x.noRate).length;const ncol=groups.length;
+  let h=`<div class="row" style="margin-bottom:8px"><h1 style="font-size:22px;margin-right:auto">BOQ · ราคาต่อห้อง</h1><button class="btn" data-act="bview" data-v="boq">← รายการ BOQ</button><button class="btn" data-act="rpxls">Excel</button><button class="btn pri" data-act="rppdf">PDF</button></div>
    <div class="chiprow"><span class="small muted">อาคาร</span>${bchips}</div>
-   <div class="row" style="margin:6px 0 10px"><select id="rpf" style="width:auto"><option value="">ทุกชั้น</option>${floors.map(f=>`<option value="${esc(f)}" ${UI.rpf===f?'selected':''}>ชั้น ${esc(f||'-')}</option>`).join('')}</select><input type="search" id="rpq" placeholder="ค้นหาห้อง เช่น E101" value="${esc(UI.rpq||'')}" style="max-width:220px"><button class="btn sm" data-act="rpall">ขยายทุกห้อง</button><button class="btn sm" data-act="rpnone">ย่อทุกห้อง</button></div>
-   <div class="stats"><div><b class="mono">${rs.length}</b><span>ห้อง</span></div><div><b class="mono" style="color:var(--accent)">${f2(grand)}</b><span>รวมมูลค่า (บาท)</span></div><div><b class="mono">${rs.length?f2(grand/rs.length):'-'}</b><span>เฉลี่ยต่อห้อง</span></div><div><b class="mono ${nor?'warnt':''}">${nor}</b><span>ห้องที่มีรายการไม่มีราคา</span></div></div>
-   <p class="hint">ราคา = ปริมาณของห้อง (จากตารางห้อง) × ค่าแรง/หน่วยใน BOQ · งานที่นับเป็นจำนวน (เช่น ช่องสบู่ ช่อง / Floor drain ตัว) ให้เพิ่มเป็น ITEM ในตารางห้อง ตั้งหน่วยและค่าแรง/หน่วยในหน้า BOQ แล้วกรอกจำนวนต่อห้อง · กดชื่อห้องเพื่อดูรายละเอียด</p>`;
-  if(!rs.length)return h+'<div class="empty">ยังไม่มีห้องที่มีปริมาณงาน — เพิ่มในแท็บ “ตารางห้อง”</div>';
-  h+=`<div class="tblwrap"><table class="grid-t"><thead><tr><th>ห้อง</th>${P.groups.map(g=>`<th class="r">${esc(g)}</th>`).join('')}<th class="r">รวมต่อห้อง (บาท)</th></tr></thead><tbody>`;
+   <div class="panel" style="margin:8px 0;padding:10px 12px">
+    <div class="chiprow" style="margin-bottom:8px"><span class="small muted" style="min-width:44px">ชั้น</span><button class="chipbtn ${UI.rpfs.size?'':'on'}" data-act="rpfl" data-v="__all">ทุกชั้น</button>${D.allFloors.map(f=>`<button class="chipbtn ${UI.rpfs.has(f)?'on':''}" data-act="rpfl" data-v="${esc(f)}">ชั้น ${esc(f||'-')}</button>`).join('')}</div>
+    <div class="chiprow"><span class="small muted" style="min-width:44px">งาน</span><button class="chipbtn ${UI.rpg.size?'':'on'}" data-act="rpgp" data-v="">ทุกงาน</button>${allG.map(g=>`<button class="chipbtn ${UI.rpg.has(g)?'on':''}" data-act="rpgp" data-v="${esc(g)}">${esc(g)}</button>`).join('')}</div>
+    <div class="small muted" style="margin-top:6px">กดเลือกได้หลายชั้น / หลายงาน — ยอดและ PDF/Excel จะนับเฉพาะที่เลือก</div></div>
+   <div class="row" style="margin:6px 0 10px"><span class="row" style="gap:4px"><button class="chipbtn ${UI.rpv==='room'?'on':''}" data-act="rpvw" data-v="room">รายห้อง</button><button class="chipbtn ${UI.rpv==='floor'?'on':''}" data-act="rpvw" data-v="floor">สรุปรายชั้น</button></span><input type="search" id="rpq" placeholder="ค้นหาห้อง เช่น E101" value="${esc(UI.rpq||'')}" style="max-width:200px">${UI.rpv==='room'?'<button class="btn sm" data-act="rpall">ขยายทุกห้อง</button><button class="btn sm" data-act="rpnone">ย่อทุกห้อง</button>':''}</div>
+   <div class="stats"><div><b class="mono">${rs.length}</b><span>ห้อง</span></div><div><b class="mono" style="color:var(--accent)">${f2(grand)}</b><span>รวมมูลค่า (บาท)</span></div><div><b class="mono">${rs.length?f2(grand/rs.length):'-'}</b><span>เฉลี่ยต่อห้อง</span></div><div><b class="mono ${nor?'warnt':''}">${nor}</b><span>ห้องที่มีรายการไม่มีราคา</span></div></div>`;
+  if(!rs.length)return h+'<div class="empty">ไม่พบห้องตามที่เลือก (ห้องต้องมีปริมาณงานในหมวดที่เลือก)</div>';
+  if(UI.rpv==='floor'){
+    h+=`<div class="tblwrap"><table class="grid-t"><thead><tr><th>ชั้น</th><th class="r">ห้อง</th>${groups.map(g=>`<th class="r">${esc(g)}</th>`).join('')}<th class="r">รวม (บาท)</th></tr></thead><tbody>${floors.map(f=>`<tr><td><b>ชั้น ${esc(f.floor||'-')}</b></td><td class="r mono">${f.n}</td>${groups.map(g=>`<td class="r mono">${f.gs.has(g)?f2(f.gs.get(g)):'-'}</td>`).join('')}<td class="r mono"><b>${f2(f.total)}</b></td></tr>`).join('')}</tbody><tfoot><tr><td><b>รวมทั้งหมด</b></td><td class="r mono">${rs.length}</td>${groups.map(g=>`<td class="r mono"><b>${f2(rs.reduce((a,x)=>a+(x.gs.get(g)||0),0))}</b></td>`).join('')}<td class="r mono"><b>${f2(grand)}</b></td></tr></tfoot></table></div>`;
+    return h}
+  h+=`<div class="tblwrap stk"><table class="grid-t sr"><thead><tr><th>ห้อง</th>${groups.map(g=>`<th class="r">${esc(g)}</th>`).join('')}<th class="r">รวมต่อห้อง (บาท)</th></tr></thead><tbody>`;
   let fl=null;
   for(const x of rs){const r=x.room;
-    if((r.floor||'')!==fl){fl=r.floor||'';const ft=rs.filter(y=>(y.room.floor||'')===fl).reduce((a,y)=>a+y.total,0);h+=`<tr class="band"><td colspan="${ncol+2}"><b>ชั้น ${esc(fl||'-')}</b> <span class="small muted" style="font-weight:400">รวม ${f2(ft)} บาท</span></td></tr>`}
+    if((r.floor||'')!==fl){fl=r.floor||'';const f=floors.find(y=>y.floor===fl);h+=`<tr class="band"><td colspan="${ncol+2}"><b>ชั้น ${esc(fl||'-')}</b> <span class="small muted" style="font-weight:400">${f.n} ห้อง · รวม ${f2(f.total)} บาท</span></td></tr>`}
     const open=UI.rpx.has(r.id);
-    h+=`<tr class="${x.noRate?'overr':''}"><td><button class="btn sm" data-act="rpx" data-id="${r.id}" style="margin-right:6px">${open?'▼':'▶'}</button><b>${esc(r.name)}</b>${x.noRate?` <span class="small warnt">${x.noRate} รายการไม่มีราคา</span>`:''}</td>${P.groups.map(g=>`<td class="r mono">${x.gs.has(g)?f2(x.gs.get(g)):'-'}</td>`).join('')}<td class="r mono"><b>${f2(x.total)}</b></td></tr>`;
+    h+=`<tr class="${x.noRate?'overr':''}"><td class="stkc"><button class="btn sm" data-act="rpx" data-id="${r.id}" style="margin-right:6px">${open?'▼':'▶'}</button><b>${esc(r.name)}</b>${x.noRate?` <span class="small warnt">${x.noRate} ไม่มีราคา</span>`:''}</td>${groups.map(g=>`<td class="r mono">${x.gs.has(g)?f2(x.gs.get(g)):'-'}</td>`).join('')}<td class="r mono"><b>${f2(x.total)}</b></td></tr>`;
     if(open)h+=`<tr><td colspan="${ncol+2}" style="padding:6px 12px 12px 40px"><table class="grid-t"><thead><tr><th>รายการ</th><th class="r">ปริมาณ</th><th>หน่วย</th><th class="r">ค่าแรง/หน่วย</th><th class="r">บาท</th></tr></thead><tbody>
       ${(()=>{let g=null,s='';for(const l of x.lines){if(l.group!==g){g=l.group;s+=`<tr class="band"><td colspan="5"><b>${esc(g)}</b> <span class="small muted" style="font-weight:400">รวม ${f2(x.gs.get(g))} บาท</span></td></tr>`}
         s+=`<tr><td>${esc(l.it.name)}</td><td class="r mono">${fq(l.qty)}</td><td>${esc(l.it.unit||'')}</td><td class="r mono ${l.rate?'':'warnt'}">${l.rate?f2(l.rate):'ไม่มีราคา'}</td><td class="r mono">${f2(l.amt)}</td></tr>`}return s})()}
       </tbody><tfoot><tr><td colspan="4" class="r"><b>รวมราคางานต่อห้อง ${esc(r.name)}</b></td><td class="r mono"><b>${f2(x.total)}</b></td></tr></tfoot></table></td></tr>`}
-  h+=`</tbody><tfoot><tr><td><b>รวมทั้งหมด</b></td>${P.groups.map(g=>`<td class="r mono"><b>${f2(rs.reduce((a,x)=>a+(x.gs.get(g)||0),0))}</b></td>`).join('')}<td class="r mono"><b>${f2(grand)}</b></td></tr></tfoot></table></div>`;
+  h+=`</tbody><tfoot><tr><td class="stkc"><b>รวมทั้งหมด</b></td>${groups.map(g=>`<td class="r mono"><b>${f2(rs.reduce((a,x)=>a+(x.gs.get(g)||0),0))}</b></td>`).join('')}<td class="r mono"><b>${f2(grand)}</b></td></tr></tfoot></table></div>`;
   return h;
 }
 function viewBoq(){
