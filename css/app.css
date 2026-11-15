@@ -397,3 +397,5 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):focus,select:focus
 .grid-t.rmt td input[type=text]{width:100%}
 .grid-t.rmt thead th{white-space:normal;min-width:90px;font-size:12px;vertical-align:bottom}
 .grid-t.rmt thead th.stkc0,.grid-t.rmt thead th.stkc1,.grid-t.rmt thead th.stkc2{min-width:0}
+
+.grid-t.sr input.pcin{width:100%;margin-top:3px;height:26px;font-size:12px;padding:2px 6px;opacity:.85}
