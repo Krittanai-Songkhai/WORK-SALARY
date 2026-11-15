@@ -230,6 +230,8 @@ document.addEventListener('change',async e=>{
   if(d.s==='sent'){setField(curSub(),'sent',t.checked);return}
   if(d.ri){const c=by('crews',UI.crew);c.rates=c.rates||{};if(t.checked){const b=by('boq',d.ri);c.rates[d.ri]=c.rates[d.ri]||num(b&&b.rate)}else delete c.rates[d.ri];save(c);render();return}
   if(d.rm){const c=by('crews',UI.crew);const s=new Set(c.roomIds||[]);t.checked?s.add(d.rm):s.delete(d.rm);c.roomIds=[...s];save(c);render();return}
+  if(d.pi!==undefined){const s=curSub();if(!s||t.value==='')return;const k=calcCrew(by('crews',s.crewId),s.no);const p=num(t.value);const vis=new Set([...document.querySelectorAll('[data-pr]')].map(e=>e.dataset.pr));
+    const rs=k.rows.filter(r=>r.boqId===d.pi&&vis.has(r.roomId));rs.forEach(r=>setSubEntry(s,r.key,+(r.qty*p/100).toFixed(4)));toast(`ใส่ ${p}% ให้งานนี้ ${rs.length} ห้อง`);render();return}
   if(d.pr!==undefined||d.pf!==undefined||d.pall!==undefined){const s=curSub();if(!s)return;const k=calcCrew(by('crews',s.crewId),s.no);const p=num(t.value);if(t.value==='')return;
     const sel=d.pr!==undefined?(r=>r.roomId===d.pr):d.pf!==undefined?(r=>(r.floor||'')===d.pf&&r.roomId):(r=>r.roomId);
     k.rows.filter(sel).forEach(r=>setSubEntry(s,r.key,+(r.qty*p/100).toFixed(4)));toast(`ใส่ ${p}% แล้ว`);render();return}
