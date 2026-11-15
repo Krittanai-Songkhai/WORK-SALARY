@@ -210,3 +210,30 @@ function roomPricePages(b){
   pages.push(`<div class="dp">${head('สรุปราคารายชั้น (บาท)')}<table class="dt dense">${colg}<thead><tr><th>ชั้น</th>${groups.map(g=>`<th>${esc(g)}</th>`).join('')}<th>รวม (บาท)</th></tr></thead><tbody>${frow}${totRow}</tbody></table>${foot}</div>`);
   const N=pages.length;return pages.map((h,i)=>h.replace(/%%P%%/g,i+1).replace(/%%N%%/g,N));
 }
+
+
+/* --- PDF: ตารางห้อง (ปริมาณต่อ ITEM ตามชั้น/งานที่เลือก) --- */
+function roomTablePages(b){
+  const D=roomTableData(b);const{its,rooms}=D;if(!rooms.length||!its.length)return[];const P=S.project;
+  const ft=[UI.mrf.size?'ชั้น '+[...UI.mrf].sort(natCmp).join(', '):'ทุกชั้น',UI.mrg.size?'งาน: '+[...UI.mrg].join(', '):'ทุกงาน'].join(' · ');
+  const head=t=>`<table class="dh"><colgroup><col style="width:92px"><col style="width:30%"><col><col style="width:22%"></colgroup>
+   <tr><td rowspan="2" class="lg">${logoHTML()}</td><td class="c">โครงการ : ${esc(P.name)}</td><td class="ttl" rowspan="2" style="font-size:20px">ตารางห้อง · ปริมาณงาน</td><td class="c">Date : ${esc(fmtShort(todayISO()))}</td></tr>
+   <tr><td class="c">อาคาร : <b>${esc(b)}</b></td><td class="c">${esc(fmtDate(todayISO()))}</td></tr></table><div class="band">${esc(t)}</div><div class="band2"><span>${esc(ft)}</span></div>`;
+  const foot=`<div class="dpf"><span>${esc(P.name)} · อาคาร ${esc(b)} · ตารางห้อง</span><span>%%P%% / %%N%%</span></div>`;
+  const IC=10,RP=22,LAST=19;const chunks=[];for(let i=0;i<its.length;i+=IC)chunks.push(its.slice(i,i+IC));
+  const sum=(rs,i)=>rs.reduce((a,r)=>a+num((r.qty||{})[i.id]),0);
+  const out=[];
+  chunks.forEach((ch,ci)=>{
+    const colg=`<colgroup><col style="width:${ch.length>6?120:160}px">${ch.map(()=>'<col>').join('')}</colgroup>`;
+    const th=`<thead><tr><th>ห้อง / ชั้น</th>${ch.map(i=>`<th>${esc(i.name)}<br><span style="font-weight:400">${esc(i.unit||'')}</span></th>`).join('')}</tr></thead>`;
+    const flat=[];let fl=null;
+    for(const r of rooms){const f=r.floor||'';if(f!==fl){fl=f;const fr=rooms.filter(x=>(x.floor||'')===f);flat.push(`<tr class="fl"><td>ชั้น ${esc(f||'-')} · ${fr.length} ห้อง</td>${ch.map(i=>`<td class="n">${fq(sum(fr,i))||''}</td>`).join('')}</tr>`)}
+      flat.push(`<tr><td>${esc(r.name)}</td>${ch.map(i=>{const q=num((r.qty||{})[i.id]);return`<td class="n">${q?fq(q):'-'}</td>`}).join('')}</tr>`)}
+    const pg=[];for(let i=0;i<flat.length;i+=RP)pg.push(flat.slice(i,i+RP));
+    for(let i=0;i<pg.length-1;i++){const l=pg[i];if(l.length&&/class="fl"/.test(l[l.length-1]))pg[i+1].unshift(l.pop())}
+    if(pg[pg.length-1].length>LAST)pg.push([]);
+    const tot=`<tr class="tot"><td>รวมที่แสดง (${rooms.length} ห้อง)</td>${ch.map(i=>`<td class="n">${fq(sum(rooms,i))}</td>`).join('')}</tr><tr class="tot"><td>BOQ</td>${ch.map(i=>`<td class="n">${i.qty?fq(i.qty):'-'}</td>`).join('')}</tr>`;
+    pg.forEach((rows,pi)=>out.push(`<div class="dp">${head(ci===0&&pi===0?'ปริมาณงานต่อห้อง':'ปริมาณงานต่อห้อง (ต่อ)')}<table class="dt dense">${colg}${th}<tbody>${rows.join('')}${pi===pg.length-1?tot:''}</tbody></table>${foot}</div>`));
+  });
+  const N=out.length;return out.map((h,i)=>h.replace(/%%P%%/g,i+1).replace(/%%N%%/g,N));
+}

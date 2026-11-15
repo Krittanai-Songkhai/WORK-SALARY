@@ -256,19 +256,54 @@ function viewBoq(){
 }
 
 /* ---- ตารางห้อง ---- */
+UI.mrf=new Set();UI.mrg=new Set();UI.mrq='';UI.mrv='edit';UI.mrc=new Set();
+/* ข้อมูลตารางห้องตามตัวกรอง (ชั้น / งาน / ค้นหา) */
+function roomTableData(b){
+  const all=S.rooms.filter(r=>r.building===b).sort((a,z)=>natCmp(a.floor,z.floor)||natCmp(a.name,z.name));
+  const itsAll=S.boq.filter(x=>x.building===b&&(x.tile||all.some(r=>(r.qty||{})[x.id]))).sort((a,z)=>natCmp(a.group||'',z.group||'')||natCmp(a.name,z.name));
+  const its=UI.mrg.size?itsAll.filter(x=>UI.mrg.has(x.group||NOGRP)):itsAll;
+  const q=(UI.mrq||'').trim().toLowerCase();
+  const rooms=all.filter(r=>(!UI.mrf.size||UI.mrf.has(r.floor||''))&&(!q||(r.name+' '+(r.floor||'')).toLowerCase().includes(q)));
+  return{all,itsAll,its,rooms,floors:[...new Set(all.map(r=>r.floor||''))].sort(natCmp),groups:[...new Set(itsAll.map(x=>x.group||NOGRP))].sort(natCmp)};
+}
 function viewRooms(){
-  const b=UI.b||S.project.buildings[0];const rooms=S.rooms.filter(r=>r.building===b).sort((a,z)=>natCmp(a.floor,z.floor)||natCmp(a.name,z.name));
-  const its=S.boq.filter(x=>x.building===b&&(x.tile||rooms.some(r=>(r.qty||{})[x.id]))).sort((a,z)=>natCmp(a.name,z.name));let fl=null;
-  const tot=it=>rooms.reduce((a,r)=>a+num((r.qty||{})[it.id]),0);
-  let h=`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto">ตารางห้อง · ปริมาณ ตร.ม. ต่อ ITEM</h1><select id="fb" style="width:auto">${bOpts(b)}</select><button class="btn" data-act="impRooms">นำเข้า Excel</button><button class="btn" data-act="newitem">＋ ITEM</button><button class="btn" data-act="bulkrooms">＋ หลายห้อง/หลายชั้น</button><button class="btn" data-act="copyfloor">⧉ คัดลอกชั้น</button><button class="btn pri" data-act="newroom">＋ ห้อง</button></div>
+  const b=UI.b||S.project.buildings[0];const D=roomTableData(b);const{all,its,rooms}=D;
+  const tot=it=>all.reduce((a,r)=>a+num((r.qty||{})[it.id]),0);
+  const bchips=S.project.buildings.map(x=>`<button class="chipbtn ${x===b?'on':''}" data-act="setb" data-v="${esc(x)}">${esc(x)} <small>${S.rooms.filter(r=>r.building===x).length}</small></button>`).join('');
+  const nEmpty=rooms.filter(r=>!its.some(i=>num((r.qty||{})[i.id])>0)).length;
+  const nBad=its.filter(i=>i.qty&&Math.abs(tot(i)-i.qty)>.5).length;
+  let body;
+  if(!all.length||!D.itsAll.length)body='<div class="empty">ยังไม่มี ITEM / ห้อง — กด “นำเข้า Excel” หรือ “＋ ITEM” แล้ว “＋ ห้อง”</div>';
+  else if(!its.length||!rooms.length)body='<div class="empty">ไม่พบข้อมูลตามที่เลือก</div>';
+  else body=UI.mrv==='floor'?roomFloorSummary(D,tot):roomEditTable(D,tot);
+  return`<div class="row" style="margin-bottom:10px"><h1 style="font-size:22px;margin-right:auto">ตารางห้อง · ปริมาณ ตร.ม. ต่อ ITEM</h1><button class="btn" data-act="rmxls">Excel</button><button class="btn" data-act="rmpdf">PDF</button><button class="btn" data-act="impRooms">นำเข้า Excel</button><button class="btn" data-act="newitem">＋ ITEM</button><button class="btn" data-act="bulkrooms">＋ หลายห้อง/หลายชั้น</button><button class="btn" data-act="copyfloor">⧉ คัดลอกชั้น</button><button class="btn pri" data-act="newroom">＋ ห้อง</button></div>
+   <div class="chiprow" style="margin-bottom:6px"><span class="small muted">อาคาร</span>${bchips}</div>
+   <div class="panel" style="margin:8px 0;padding:10px 12px">
+    <div class="chiprow" style="margin-bottom:8px"><span class="small muted" style="min-width:44px">ชั้น</span><button class="chipbtn ${UI.mrf.size?'':'on'}" data-act="mrfl" data-v="__all">ทุกชั้น</button>${D.floors.map(f=>`<button class="chipbtn ${UI.mrf.has(f)?'on':''}" data-act="mrfl" data-v="${esc(f)}">ชั้น ${esc(f||'-')}</button>`).join('')}</div>
+    <div class="chiprow"><span class="small muted" style="min-width:44px">งาน</span><button class="chipbtn ${UI.mrg.size?'':'on'}" data-act="mrgp" data-v="__all">ทุกงาน</button>${D.groups.map(g=>`<button class="chipbtn ${UI.mrg.has(g)?'on':''}" data-act="mrgp" data-v="${esc(g)}">${esc(g)}</button>`).join('')}</div>
+    <div class="small muted" style="margin-top:6px">กดเลือกได้หลายชั้น / หลายงาน — ตาราง, Excel และ PDF แสดงเฉพาะที่เลือก</div></div>
+   <div class="row" style="margin:6px 0 10px"><span class="row" style="gap:4px"><button class="chipbtn ${UI.mrv==='edit'?'on':''}" data-act="mrvw" data-v="edit">รายห้อง (แก้ไข)</button><button class="chipbtn ${UI.mrv==='floor'?'on':''}" data-act="mrvw" data-v="floor">สรุปรายชั้น</button></span><input type="search" id="mrq" placeholder="ค้นหาห้อง เช่น 201" value="${esc(UI.mrq||'')}" style="max-width:200px"></div>
+   <div class="stats"><div><b class="mono">${rooms.length}</b><span>ห้อง</span></div><div><b class="mono">${its.length}</b><span>ITEM ที่แสดง</span></div><div><b class="mono ${nEmpty?'warnt':''}">${nEmpty}</b><span>ห้องที่ยังไม่มีปริมาณ</span></div><div><b class="mono ${nBad?'warnt':''}">${nBad}</b><span>ITEM ที่ผลรวมไม่ตรง BOQ</span></div></div>
    <p class="hint">ทางลัด: ก๊อปช่วงเซลล์จาก Excel แล้ววาง (Ctrl+V) ลงช่องในตารางได้เลย (วางเกินแถวสุดท้ายจะสร้างห้องใหม่ให้) · “＋ หลายห้อง/หลายชั้น” สร้างห้องทุกชั้นทีเดียว · “คัดลอกชั้น” ทำชั้น 2-7 ให้เหมือนชั้น 1<br>ปริมาณของแต่ละห้อง/ITEM ใช้เป็นตัวคุมงบ: ผลรวมเทียบกับ BOQ ด้านล่างตาราง แล้วเลือกห้องให้แต่ละชุดในหน้าชุดช่าง</p>
-   ${rooms.length?`<div class="row" style="margin:6px 0 8px" id="rselbar"><label class="small row" style="gap:4px">เลือกทั้งชั้น <select id="rsf" style="width:auto"><option value="">— ชั้น —</option>${[...new Set(rooms.map(r=>r.floor||''))].map(f=>`<option value="${esc(f)}">${esc(f||'-')}</option>`).join('')}</select></label><button class="btn sm" data-act="rselnone">ล้างที่เลือก</button><button class="btn sm bad" data-act="delrooms" id="delrooms">ลบที่เลือก (${UI.rsel.size})</button><span class="small muted">ติ๊กหลายห้อง (หรือเลือกทั้งชั้น) แล้วกดลบทีเดียว</span></div>`:''}
-   ${its.length?`<div class="tblwrap"><table class="grid-t ed"><thead><tr><th style="width:34px"><input type="checkbox" data-rsall="1" title="เลือกทุกห้องที่แสดง" ${rooms.length&&rooms.every(r=>UI.rsel.has(r.id))?'checked':''}></th><th style="width:70px">ชั้น</th><th style="min-width:150px">ห้อง</th>${its.map(i=>`<th style="min-width:100px">${esc(i.name)}<div class="small muted">${esc(i.unit||'')}</div></th>`).join('')}<th></th></tr></thead><tbody>
-   ${rooms.map(r=>`<tr class="${UI.rsel.has(r.id)?'selrow':''}"><td><input type="checkbox" data-rs="${r.id}" ${UI.rsel.has(r.id)?'checked':''}></td><td><input type="text" data-rm2="${r.id}:floor" value="${esc(r.floor||'')}"></td><td><input type="text" data-rm2="${r.id}:name" value="${esc(r.name)}"></td>${its.map(i=>`<td><input type="number" step="any" data-r="${r.id}:${i.id}" value="${(r.qty||{})[i.id]||''}"></td>`).join('')}<td><button class="btn sm bad" data-act="delroom" data-id="${r.id}">ลบ</button></td></tr>`).join('')||`<tr><td colspan="${4+its.length}" class="empty small">ยังไม่มีห้อง</td></tr>`}</tbody>
-   <tfoot><tr><td colspan="3" class="r"><b>รวมตามห้อง</b></td>${its.map(i=>`<td class="mono" data-rt="${i.id}"><b>${fq(tot(i))}</b></td>`).join('')}<td></td></tr>
-   <tr><td colspan="3" class="r"><b>BOQ</b></td>${its.map(i=>`<td class="mono ${i.qty&&Math.abs(tot(i)-i.qty)>.5?'warnt':''}">${i.qty?fq(i.qty):'<span class="chip warn">ไม่มี BOQ</span>'}</td>`).join('')}<td></td></tr></tfoot></table></div>`
-   :'<div class="empty">ยังไม่มี ITEM / ห้อง — กด “นำเข้า Excel” หรือ “＋ ITEM” แล้ว “＋ ห้อง”</div>'}`;
-  return h;
+   ${all.length&&UI.mrv==='edit'?`<div class="row" style="margin:6px 0 8px" id="rselbar"><label class="small row" style="gap:4px">เลือกทั้งชั้น <select id="rsf" style="width:auto"><option value="">— ชั้น —</option>${D.floors.map(f=>`<option value="${esc(f)}">${esc(f||'-')}</option>`).join('')}</select></label><button class="btn sm" data-act="rselnone">ล้างที่เลือก</button><button class="btn sm bad" data-act="delrooms" id="delrooms">ลบที่เลือก (${UI.rsel.size})</button><span class="small muted">ติ๊กหลายห้อง (หรือเลือกทั้งชั้น) แล้วกดลบทีเดียว</span></div>`:''}
+   ${body}`;
+}
+function roomFloorSummary(D,tot){
+  const{its,rooms}=D;const fl=new Map();rooms.forEach(r=>{const k=r.floor||'';let f=fl.get(k);if(!f){f={n:0,q:{}};fl.set(k,f)}f.n++;its.forEach(i=>f.q[i.id]=(f.q[i.id]||0)+num((r.qty||{})[i.id]))});
+  const F=[...fl.entries()].sort((a,z)=>natCmp(a[0],z[0]));
+  return`<div class="tblwrap stk"><table class="grid-t sr"><thead><tr><th>ชั้น</th><th class="r">ห้อง</th>${its.map(i=>`<th class="r">${esc(i.name)}<div class="small muted">${esc(i.unit||'')}</div></th>`).join('')}</tr></thead><tbody>${F.map(([f,x])=>`<tr><td class="stkc"><b>ชั้น ${esc(f||'-')}</b></td><td class="r mono">${x.n}</td>${its.map(i=>`<td class="r mono">${x.q[i.id]?fq(x.q[i.id]):'-'}</td>`).join('')}</tr>`).join('')}</tbody>
+   <tfoot><tr><td class="stkc"><b>รวมที่แสดง</b></td><td class="r mono">${rooms.length}</td>${its.map(i=>`<td class="r mono"><b>${fq(F.reduce((a,[,x])=>a+(x.q[i.id]||0),0))}</b></td>`).join('')}</tr><tr><td class="stkc"><b>BOQ</b></td><td></td>${its.map(i=>`<td class="r mono ${i.qty&&Math.abs(tot(i)-i.qty)>.5?'warnt':''}">${i.qty?fq(i.qty):'<span class="chip warn">ไม่มี BOQ</span>'}</td>`).join('')}</tr></tfoot></table></div>`;
+}
+function roomEditTable(D,tot){
+  const{its,rooms}=D;let fl=null,rows='';
+  for(const r of rooms){const f=r.floor||'';
+    if(f!==fl){fl=f;const fr=rooms.filter(x=>(x.floor||'')===f);const cl=UI.mrc.has(f);
+      rows+=`<tr class="band" data-act="mrcl" data-f="${esc(f)}" style="cursor:pointer"><td colspan="3">${cl?'▶':'▼'} <b>ชั้น ${esc(f||'-')}</b> <span class="small muted" style="font-weight:400">${fr.length} ห้อง</span></td>${its.map(i=>{const s=fr.reduce((a,x)=>a+num((x.qty||{})[i.id]),0);return`<td class="mono small" style="text-align:right">${s?fq(s):''}</td>`}).join('')}<td></td></tr>`}
+    if(UI.mrc.has(f))continue;
+    rows+=`<tr class="${UI.rsel.has(r.id)?'selrow':''}"><td class="stkc0"><input type="checkbox" data-rs="${r.id}" ${UI.rsel.has(r.id)?'checked':''}></td><td class="stkc1"><input type="text" data-rm2="${r.id}:floor" value="${esc(r.floor||'')}"></td><td class="stkc2"><input type="text" data-rm2="${r.id}:name" value="${esc(r.name)}"></td>${its.map(i=>`<td><input type="number" step="any" data-r="${r.id}:${i.id}" value="${(r.qty||{})[i.id]||''}"></td>`).join('')}<td></td></tr>`}
+  return`<div class="tblwrap stk"><table class="grid-t ed rmt"><thead><tr><th class="stkc0"><input type="checkbox" data-rsall="1" title="เลือกทุกห้องที่แสดง" ${rooms.length&&rooms.every(r=>UI.rsel.has(r.id))?'checked':''}></th><th class="stkc1">ชั้น</th><th class="stkc2">ห้อง</th>${its.map(i=>`<th>${esc(i.name)}<div class="small muted">${esc(i.unit||'')}</div></th>`).join('')}<th></th></tr></thead><tbody>${rows}</tbody>
+   <tfoot><tr><td colspan="3" class="r"><b>รวมทั้งอาคาร</b></td>${its.map(i=>`<td class="mono" data-rt="${i.id}"><b>${fq(tot(i))}</b></td>`).join('')}<td></td></tr>
+   <tr><td colspan="3" class="r"><b>BOQ</b></td>${its.map(i=>`<td class="mono ${i.qty&&Math.abs(tot(i)-i.qty)>.5?'warnt':''}">${i.qty?fq(i.qty):'<span class="chip warn">ไม่มี BOQ</span>'}</td>`).join('')}<td></td></tr></tfoot></table></div>`;
 }
 
 /* ---- คลังแบบ ---- */

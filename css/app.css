@@ -385,3 +385,15 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):focus,select:focus
 .grid-t.sr th:first-child{position:sticky;left:0;z-index:4;background:var(--surface)}
 .grid-t.sr .ig1{background:rgba(127,127,127,.07)}
 @media(max-width:600px){.rmr{grid-template-columns:minmax(0,1fr) 44px 80px 74px;gap:6px;padding:8px}}
+
+/* ---- ตารางห้อง: คอลัมน์ติดซ้าย / ช่องกรอกกะทัดรัด ---- */
+.grid-t.rmt{table-layout:auto}
+.grid-t.rmt .stkc0{position:sticky;left:0;z-index:2;background:var(--surface);width:34px;min-width:34px}
+.grid-t.rmt .stkc1{position:sticky;left:34px;z-index:2;background:var(--surface);width:62px;min-width:62px}
+.grid-t.rmt .stkc2{position:sticky;left:96px;z-index:2;background:var(--surface);width:120px;min-width:120px;box-shadow:1px 0 0 var(--line)}
+.grid-t.rmt thead .stkc0,.grid-t.rmt thead .stkc1,.grid-t.rmt thead .stkc2{z-index:5}
+.grid-t.rmt tr.band td{position:static}
+.grid-t.rmt td input[type=number]{min-width:84px;width:100%}
+.grid-t.rmt td input[type=text]{width:100%}
+.grid-t.rmt thead th{white-space:normal;min-width:90px;font-size:12px;vertical-align:bottom}
+.grid-t.rmt thead th.stkc0,.grid-t.rmt thead th.stkc1,.grid-t.rmt thead th.stkc2{min-width:0}
