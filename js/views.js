@@ -99,7 +99,11 @@ function crewRoomPanel(c,bo,extraPanel){
 /* ---- บันทึกปริมาณงวด ---- */
 /* ---- งวดงานแบบตารางห้อง: ดูง่าย (การ์ดรายห้อง / ตารางคอลัมน์ติดซ้าย) + ค้นหา/กรอง/พับชั้น ---- */
 UI.sv='';UI.sq='';UI.sfl='all';UI.sfc=new Set();
-function subRoomView(c,k,items,RA,roomsAll,rowOf,exRows,lineTbl){
+UI.sff=new Set();UI.sfg=new Set();UI.svis=null;
+function subRoomView(c,k,itemsAll,RA,roomsAll0,rowOf,exRows,lineTbl){
+  const items=UI.sfg.size?itemsAll.filter(i=>UI.sfg.has(i.boqId)):itemsAll;
+  const roomsAll=roomsAll0.filter(r=>(!UI.sff.size||UI.sff.has(r.floor||''))&&items.some(it=>rowOf.has(r.id+'~'+it.boqId)));
+  const floorsAll=[...new Set(roomsAll0.map(r=>r.floor||''))];
   const mode=UI.sv||(window.innerWidth<900?'card':'table');const q=(UI.sq||'').trim().toLowerCase();
   const stat=r=>{const rs=items.map(it=>rowOf.get(r.id+'~'+it.boqId)).filter(Boolean);return{todo:rs.some(x=>x.cum<x.qty-1e-9),cur:rs.some(x=>x.cur>0),rs}};
   const rooms=roomsAll.filter(r=>(!q||(r.name+' '+(r.floor||'')).toLowerCase().includes(q))&&(UI.sfl==='all'||(UI.sfl==='todo'?stat(r).todo:stat(r).cur)));
@@ -107,7 +111,11 @@ function subRoomView(c,k,items,RA,roomsAll,rowOf,exRows,lineTbl){
   const chip=(v,l,n)=>`<button class="chipbtn ${UI.sfl===v?'on':''}" data-act="sfl" data-v="${v}">${l} <small>${n}</small></button>`;
   let h=`<div class="srbar"><div class="row" style="gap:8px"><button class="btn sm" data-act="fillall">เติมคงเหลือทั้งหมดเป็น “เสร็จ”</button><button class="btn sm" data-act="clearall">ล้างงวดนี้</button><label class="small" style="display:flex;gap:4px;align-items:center">ใส่ % ให้ทุกห้อง <input type="number" step="any" data-pall="1" placeholder="%" style="width:70px"></label>
     <span style="margin-left:auto" class="row"><button class="chipbtn ${mode==='card'?'on':''}" data-act="svw" data-v="card">รายห้อง</button><button class="chipbtn ${mode==='table'?'on':''}" data-act="svw" data-v="table">ตาราง</button></span></div>
-   <div class="row" style="gap:6px;margin-top:8px"><input type="search" id="sq" placeholder="ค้นหาห้อง เช่น E101" value="${esc(UI.sq||'')}" style="max-width:200px">${chip('all','ทั้งหมด',roomsAll.length)}${chip('todo','ยังไม่เสร็จ',nTodo)}${chip('cur','มีงานงวดนี้',nCur)}<span class="small muted" style="margin-left:auto">กรอกปริมาณที่ทำเสร็จ “ในงวดนี้” (ไม่ใช่สะสม) หรือใส่ % ต่อห้อง/ชั้น/ทั้งหมด</span></div></div>`;
+   <div class="row" style="gap:6px;margin-top:8px"><input type="search" id="sq" placeholder="ค้นหาห้อง เช่น E101" value="${esc(UI.sq||'')}" style="max-width:200px">${chip('all','ทั้งหมด',roomsAll.length)}${chip('todo','ยังไม่เสร็จ',nTodo)}${chip('cur','มีงานงวดนี้',nCur)}</div>
+   <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><span class="small muted">ชั้น</span><button class="chipbtn ${UI.sff.size?'':'on'}" data-act="sffl" data-v="__all">ทุกชั้น</button>${floorsAll.map(f=>`<button class="chipbtn ${UI.sff.has(f)?'on':''}" data-act="sffl" data-v="${esc(f)}">ชั้น ${esc(f||'-')}</button>`).join('')}</div>
+   <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><span class="small muted">งาน</span><button class="chipbtn ${UI.sfg.size?'':'on'}" data-act="sfgp" data-v="__all">ทุกงาน</button>${itemsAll.map(i=>`<button class="chipbtn ${UI.sfg.has(i.boqId)?'on':''}" data-act="sfgp" data-v="${esc(i.boqId)}">${esc(i.name)}</button>`).join('')}</div>
+   <div class="row" style="gap:6px;margin-top:8px"><span class="small muted" style="margin-left:auto">กรอกปริมาณที่ทำเสร็จ “ในงวดนี้” (ไม่ใช่สะสม) หรือใส่ % ต่อห้อง/ชั้น/ทั้งหมด</span></div></div>`;
+  UI.svis=new Set();rooms.forEach(r=>items.forEach(it=>UI.svis.add(r.id+'~'+it.boqId)));
   if(!rooms.length)return h+'<div class="empty small">ไม่พบห้องตามที่กรอง</div>'+(exRows.length?`<h3 style="margin:14px 0 6px">รายการอื่นๆ นอกตารางห้อง</h3>`+lineTbl(exRows):'');
   const bar=a=>{const p=a&&a.amt?Math.min(100,a.cumAmt/a.amt*100):0;return`<div class="rbar" title="สะสม ${pct(p)}"><i style="width:${p}%"></i></div>`};
   const flb=(fl,n)=>`<div class="sfband" data-act="sfc" data-f="${esc(fl||'')}"><span>${UI.sfc.has(fl||'')?'▶':'▼'}</span><b>ชั้น ${esc(fl||'-')}</b><span class="small muted">${n} ห้อง</span><label class="small" style="margin-left:auto;font-weight:400" onclick="event.stopPropagation()">ใส่ % ทั้งชั้น <input type="number" step="any" data-pf="${esc(fl||'')}" placeholder="%" style="width:66px"></label></div>`;
@@ -334,9 +342,10 @@ function viewSet(){
 function render(){
   pageAnim(UI.tab+'|'+(UI.crew||'')+'|'+(UI.sub||''));
   $('#top').innerHTML=viewTop();
-  const m=$('#main');const sc=window.scrollY;
+  const m=$('#main');const sc=window.scrollY;const tw=[...document.querySelectorAll('.tblwrap')].map(e=>[e.scrollTop,e.scrollLeft]);
   m.innerHTML=UI.sub?viewSub():UI.crew?viewCrew():UI.tab==='crews'?viewCrews():UI.tab==='boq'?viewBoq():UI.tab==='rooms'?viewRooms():UI.tab==='plans'?viewPlans():UI.tab==='set'?viewSet():viewHome();
   window.scrollTo(0,sc);
+  if(tw.length)document.querySelectorAll('.tblwrap').forEach((e,i)=>{if(tw[i]){e.scrollTop=tw[i][0];e.scrollLeft=tw[i][1]}});
 }
 
 /* animation เปลี่ยนหน้า: เล่นเฉพาะเมื่อเปลี่ยนหน้า/แท็บ (ไม่เล่นตอนรีเฟรชข้อมูล) */

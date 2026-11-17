@@ -74,6 +74,8 @@ const ACT={
       const ids=$$('input:checked',o).map(i=>i.value);ids.forEach(id=>{const x=ctl.find(y=>y.it.id===id);const t=x.it;newLine(c,{floor:t.group||'',name:t.name,unit:t.unit||'',qty:x.remain>0?+x.remain.toFixed(3):num(t.qty),rate:num(t.rate),boqId:t.id})});o.remove();render()});
   },
   svw(el){UI.sv=el.dataset.v;render()},
+  sffl(el){const f=el.dataset.v;if(f==='__all')UI.sff.clear();else UI.sff.has(f)?UI.sff.delete(f):UI.sff.add(f);render()},
+  sfgp(el){const g=el.dataset.v;if(g==='__all')UI.sfg.clear();else UI.sfg.has(g)?UI.sfg.delete(g):UI.sfg.add(g);render()},
   sfl(el){UI.sfl=el.dataset.v;render()},
   sfc(el){const f=el.dataset.f;UI.sfc.has(f)?UI.sfc.delete(f):UI.sfc.add(f);render()},
   bview(el){UI.bv=el.dataset.v;render()},
@@ -93,9 +95,9 @@ const ACT={
   async docsub(el){const s=by('subs',el.dataset.id);const c=by('crews',s.crewId);previewDoc(await crewDocReady(c,s.no),`${c.building}_${c.name}_งวด${s.no}`)},
   xlssub(el){const s=by('subs',el.dataset.id);exportXlsx(by('crews',s.crewId),s.no)},
   delsub(el){armBtn(el,'กดอีกครั้งเพื่อลบงวด',()=>{const s=curSub();UI.sub=null;UI.crew=s.crewId;del('subs',s.id);render()})},
-  fillall(){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
-  clearall(){const s=curSub();s.entries={};save(s);render()},
-  fullroom(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.filter(r=>r.roomId===el.dataset.id).forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
+  fillall(){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.filter(r=>!UI.svis||UI.svis.has(r.key)).forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
+  clearall(){const s=curSub();if(UI.svis&&(UI.sff.size||UI.sfg.size))UI.svis.forEach(k=>delete s.entries[k]);else s.entries={};save(s);render()},
+  fullroom(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.filter(r=>r.roomId===el.dataset.id&&(!UI.svis||UI.svis.has(r.key))).forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
   pctline(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===el.dataset.key);const p=+el.dataset.p;
     const v=p===100?Math.max(0,r.qty-r.prev):r.qty*p/100;setSubEntry(s,r.key,+v.toFixed(4));render()},
   async bpdf(){await ensureData([S.project.logoId],true);const pg=buildingPages(UI.b,UI.kind);previewDoc(pg,'สรุปส่งงาน_'+(UI.b||'ทุกอาคาร'))},
@@ -231,8 +233,9 @@ document.addEventListener('change',async e=>{
   if(d.ri){const c=by('crews',UI.crew);c.rates=c.rates||{};if(t.checked){const b=by('boq',d.ri);c.rates[d.ri]=c.rates[d.ri]||num(b&&b.rate)}else delete c.rates[d.ri];save(c);render();return}
   if(d.rm){const c=by('crews',UI.crew);const s=new Set(c.roomIds||[]);t.checked?s.add(d.rm):s.delete(d.rm);c.roomIds=[...s];save(c);render();return}
   if(d.pc!==undefined){const s=curSub();if(!s||t.value==='')return;const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===d.pc);if(!r)return;const p=num(t.value);setSubEntry(s,r.key,+(r.qty*p/100).toFixed(4));toast(`ใส่ ${p}% แล้ว`);render();return}
+  const vk=r=>!UI.svis||UI.svis.has(r.key);
   if(d.pr!==undefined||d.pf!==undefined||d.pall!==undefined){const s=curSub();if(!s)return;const k=calcCrew(by('crews',s.crewId),s.no);const p=num(t.value);if(t.value==='')return;
-    const sel=d.pr!==undefined?(r=>r.roomId===d.pr):d.pf!==undefined?(r=>(r.floor||'')===d.pf&&r.roomId):(r=>r.roomId);
+    const sel=d.pr!==undefined?(r=>r.roomId===d.pr&&vk(r)):d.pf!==undefined?(r=>(r.floor||'')===d.pf&&r.roomId&&vk(r)):(r=>r.roomId&&vk(r));
     k.rows.filter(sel).forEach(r=>setSubEntry(s,r.key,+(r.qty*p/100).toFixed(4)));toast(`ใส่ ${p}% แล้ว`);render();return}
   if(d.rs!==undefined){t.checked?UI.rsel.add(d.rs):UI.rsel.delete(d.rs);const tr=t.closest('tr');if(tr)tr.classList.toggle('selrow',t.checked);const bt=$('#delrooms');if(bt)bt.textContent=`ลบที่เลือก (${UI.rsel.size})`;return}
   if(d.rsall!==undefined){const b=UI.b||S.project.buildings[0];roomTableData(b).rooms.forEach(r=>t.checked?UI.rsel.add(r.id):UI.rsel.delete(r.id));render();return}
