@@ -95,6 +95,16 @@ const ACT={
   async docsub(el){const s=by('subs',el.dataset.id);const c=by('crews',s.crewId);previewDoc(await crewDocReady(c,s.no),`${c.building}_${c.name}_งวด${s.no}`)},
   xlssub(el){const s=by('subs',el.dataset.id);exportXlsx(by('crews',s.crewId),s.no)},
   delsub(el){armBtn(el,'กดอีกครั้งเพื่อลบงวด',()=>{const s=curSub();UI.sub=null;UI.crew=s.crewId;del('subs',s.id);render()})},
+  subrate(){const s=curSub();if(!s)return;const c=by('crews',s.crewId);const k=calcCrew(c,s.no);
+    const m=new Map();k.rows.forEach(r=>{if(!m.has(r.rk))m.set(r.rk,{rk:r.rk,name:r.name,unit:r.unit,base:r.rate,floor:r.roomId?'':r.floor})});
+    const subs=subsOf(c);const prevEff=(rk,base)=>effRate(subs,s.no-1,rk,base);
+    const o=overlay('<div class="box wide"></div>','modal');const box=$('.box',o);
+    const draw=()=>{box.innerHTML=`<h3 style="margin-bottom:4px">ปรับราคา/หน่วย · งวดที่ ${s.no}</h3><p class="hint" style="margin:0 0 8px">ราคาที่ตั้งจะใช้กับปริมาณที่ส่งในงวดนี้เป็นต้นไป (จนกว่างวดถัดไปจะตั้งใหม่) ส่วนงวดก่อนหน้าคงราคาเดิม เว้นว่าง = ใช้ราคาจากงวดก่อน/ราคาสัญญา</p>
+      <table class="grid-t"><thead><tr><th>รายการ</th><th class="r">ราคาสัญญา</th><th class="r">งวดก่อน</th><th class="r">งวดนี้ (บาท/หน่วย)</th></tr></thead><tbody>${[...m.values()].map(x=>{const pe=prevEff(x.rk,x.base);const cur=effRate(subs,s.no,x.rk,x.base);const set=s.rates&&s.rates[x.rk]!==undefined;return`<tr><td>${esc(x.floor?x.floor+' · ':'')}${esc(x.name)} <span class="small muted">/${esc(x.unit)}</span></td><td class="r mono">${f2(x.base)}</td><td class="r mono">${f2(pe)}</td><td class="r"><input type="number" step="any" data-sr="${esc(x.rk)}" value="${set?s.rates[x.rk]:''}" placeholder="${f2(pe)}" style="width:110px">${set&&Math.abs(cur-pe)>1e-9?`<div class="small" style="color:${cur>pe?'var(--good)':'var(--bad)'}">${cur>pe?'▲ เพิ่ม':'▼ ลด'} ${f2(Math.abs(cur-pe))}</div>`:''}</td></tr>`}).join('')}</tbody></table>
+      <div class="row" style="margin-top:12px;justify-content:space-between"><button class="btn sm" data-x="clr">ล้างการปรับราคางวดนี้</button><button class="btn pri" data-x="ok">เสร็จ</button></div>`};
+    draw();
+    o.addEventListener('change',e=>{const t=e.target;if(t.dataset.sr===undefined)return;s.rates=s.rates||{};if(t.value==='')delete s.rates[t.dataset.sr];else s.rates[t.dataset.sr]=num(t.value);save(s);draw()});
+    o.addEventListener('click',e=>{const x=e.target.closest('[data-x]');if(e.target===o||(x&&x.dataset.x==='ok')){o.remove();render();return}if(x&&x.dataset.x==='clr'){s.rates={};save(s);draw()}})},
   fillall(){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.filter(r=>!UI.svis||UI.svis.has(r.key)).forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
   clearall(){const s=curSub();if(UI.svis&&(UI.sff.size||UI.sfg.size))UI.svis.forEach(k=>delete s.entries[k]);else s.entries={};save(s);render()},
   fullroom(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.filter(r=>r.roomId===el.dataset.id&&(!UI.svis||UI.svis.has(r.key))).forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},

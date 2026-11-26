@@ -15,13 +15,20 @@ function crewRows(c){
   return lineRows(c).map(r=>({...r,extra:false}));
 }
 const needsBoqWarn=r=>!r.boq&&(r.nb||'nobq')==='nobq';
+/* ราคาต่อหน่วยที่ปรับรายงวด: s.rates[rateKey] มีผลตั้งแต่งวดนั้นเป็นต้นไป (จนกว่างวดถัดไปจะตั้งใหม่) */
+const rateKey=r=>r.roomId?r.boqId:r.key;
+function effRate(subs,no,rk,base){
+  let v=base,best=-1;for(const s of subs){if(s.no<=no&&s.no>best&&s.rates&&s.rates[rk]!==undefined&&s.rates[rk]!==''){best=s.no;v=num(s.rates[rk])}}return v}
 /* คำนวณงวด no (ไม่ระบุ = งวดล่าสุด) */
 function calcCrew(c,no){
   const subs=subsOf(c);const cur=no!=null?subs.find(s=>s.no===no):subs[subs.length-1];const n=cur?cur.no:(subs.length?subs[subs.length-1].no+1:1);
   const prevSubs=subs.filter(s=>s.no<n);
   const rows=crewRows(c).map(r=>{
+    const rk=rateKey(r);
     const prev=prevSubs.reduce((a,s)=>a+num((s.entries||{})[r.key]),0);const q=cur?num((cur.entries||{})[r.key]):0;
-    const cum=prev+q;return{...r,prev,cur:q,cum,amt:r.qty*r.rate,prevAmt:prev*r.rate,curAmt:q*r.rate,cumAmt:cum*r.rate,pct:r.qty?cum/r.qty*100:0,over:cum>r.qty+1e-9}});
+    const prevAmt=prevSubs.reduce((a,s)=>a+num((s.entries||{})[r.key])*effRate(subs,s.no,rk,r.rate),0);
+    const crate=cur?effRate(subs,cur.no,rk,r.rate):r.rate;
+    const cum=prev+q;return{...r,rk,crate,rchg:Math.abs(crate-r.rate)>1e-9,prev,cur:q,cum,amt:r.qty*r.rate,prevAmt,curAmt:q*crate,cumAmt:prevAmt+q*crate,pct:r.qty?cum/r.qty*100:0,over:cum>r.qty+1e-9}});
   const sum=k=>rows.reduce((a,r)=>a+r[k],0);
   const T={amt:sum('amt'),prevAmt:sum('prevAmt'),curAmt:sum('curAmt'),cumAmt:sum('cumAmt')};T.pct=T.amt?T.cumAmt/T.amt*100:0;T.prevPct=T.amt?T.prevAmt/T.amt*100:0;T.curPct=T.amt?T.curAmt/T.amt*100:0;
   return{crew:c,sub:cur||null,no:n,rows,T,subs,missing:rows.filter(needsBoqWarn).length};
