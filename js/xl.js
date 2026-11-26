@@ -113,7 +113,7 @@ async function xRoomSheets(wb,c,k){
       xnum(ws,r,c0,{formula:rng(c0),result:it.qty},FQ,{b:true,fill:'F3F3F3',border:tb});xnum(ws,r,c0+1,{formula:rng(c0+1),result:it.prev},FQ,{b:true,fill:'F3F3F3',border:tb});xnum(ws,r,c0+2,{formula:rng(c0+2),result:it.cur},FQ,{b:true,fill:CURF,border:tb});
       xnum(ws,r,c0+3,{formula:`IF(${colL(c0)}${r}=0,0,(${colL(c0+1)}${r}+${colL(c0+2)}${r})/${colL(c0)}${r})`,result:it.qty?(it.prev+it.cur)/it.qty:0},FP,{b:true,fill:'F3F3F3',border:tb})});
     const t1=r;r++;ws.getRow(r).height=22;xb(ws,r,1,r,1,'มูลค่างวดนี้ (บาท)',{b:true,fill:'F3F3F3',border:X_BOX(X_BLK)});
-    its.forEach((it,j)=>{const c0=2+j*4;xb(ws,r,c0,r,c0+3,{formula:`${colL(c0+2)}${t1}*${it.rate}`,result:it.cur*it.rate},{al:'right',b:true,fill:'F3F3F3',fmt:FM,border:X_BOX(X_BLK)})});
+    its.forEach((it,j)=>{const c0=2+j*4;xb(ws,r,c0,r,c0+3,it.curAmt,{al:'right',b:true,fill:'F3F3F3',fmt:FM,border:X_BOX(X_BLK)})});
     r+=2;
   }
   xPage(ws,n);
@@ -125,16 +125,16 @@ async function xRoomSheets(wb,c,k){
   ['ปริมาณ','ค่าแรง/\nหน่วย','บาท','ปริมาณ','บาท'].forEach((t,i)=>G(q+1,3+i,q+1,3+i,t));G(q+1,8,q+1,8,'ปริมาณ',CURH);G(q+1,9,q+1,9,'บาท',CURH);G(q+1,10,q+1,10,'บาท');G(q+1,11,q+1,11,'%');G(q+1,12,q+1,12,'BOQ');G(q+1,13,q+1,13,'คงเหลือ');
   q+=2;const f0=q;const bc=boqControl(c.building);
   for(const it of items){const b=bc.find(y=>y.it.id===it.boqId);const B=X_BOX(X_THIN);w2.getRow(q).height=24;
-    xb(w2,q,1,q,1,it.name,{border:B});xb(w2,q,2,q,2,it.unit,{al:'center',border:B});xnum(w2,q,3,it.qty,FQ);xnum(w2,q,4,it.rate,FM);xnum(w2,q,5,{formula:`C${q}*D${q}`,result:it.qty*it.rate},FM);
-    xnum(w2,q,6,it.prev,FQ);xnum(w2,q,7,{formula:`F${q}*D${q}`,result:it.prev*it.rate},FM);xnum(w2,q,8,it.cur,FQ,{fill:CURF});xnum(w2,q,9,{formula:`H${q}*D${q}`,result:it.cur*it.rate},FM,{fill:CURF});
-    xnum(w2,q,10,{formula:`(F${q}+H${q})*D${q}`,result:(it.prev+it.cur)*it.rate},FM);xnum(w2,q,11,{formula:`IF(C${q}=0,0,(F${q}+H${q})/C${q})`,result:it.qty?(it.prev+it.cur)/it.qty:0},FP);
+    xb(w2,q,1,q,1,it.name,{border:B});xb(w2,q,2,q,2,it.unit,{al:'center',border:B});xnum(w2,q,3,it.qty,FQ);xnum(w2,q,4,it.rate,FM);xnum(w2,q,5,it.amt,FM);
+    xnum(w2,q,6,it.prev,FQ);xnum(w2,q,7,it.prevAmt,FM);xnum(w2,q,8,it.cur,FQ,{fill:CURF});xnum(w2,q,9,it.curAmt,FM,{fill:CURF});
+    xnum(w2,q,10,it.cumAmt,FM);xnum(w2,q,11,{formula:`IF(C${q}=0,0,(F${q}+H${q})/C${q})`,result:it.qty?(it.prev+it.cur)/it.qty:0},FP);
     xnum(w2,q,12,b&&b.qty?b.qty:0,FQ);xnum(w2,q,13,b&&b.qty?b.qty-b.alloc:0,FQ);xb(w2,q,14,q,14,b&&b.qty?(b.over?'จัดสรรเกิน BOQ':''):'ไม่มี BOQ คลุม',{color:'BB0000',fs:9,border:B});q++}
   const exr=k.rows.filter(y=>y.extra);
   if(exr.length){xb(w2,q,1,q,14,'รายการอื่นๆ นอกตารางห้อง',{b:true,fill:'F2EFE6',border:X_BOX(X_THIN)});q++;
     for(const it of exr){const B=X_BOX(X_THIN);w2.getRow(q).height=24;
       xb(w2,q,1,q,1,it.name,{border:B});xb(w2,q,2,q,2,it.unit,{al:'center',border:B});xnum(w2,q,3,it.qty,FQ);xnum(w2,q,4,it.rate,FM);xnum(w2,q,5,{formula:`C${q}*D${q}`,result:it.amt},FM);
-      xnum(w2,q,6,it.prev,FQ);xnum(w2,q,7,{formula:`F${q}*D${q}`,result:it.prevAmt},FM);xnum(w2,q,8,it.cur,FQ,{fill:CURF});xnum(w2,q,9,{formula:`H${q}*D${q}`,result:it.curAmt},FM,{fill:CURF});
-      xnum(w2,q,10,{formula:`(F${q}+H${q})*D${q}`,result:it.cumAmt},FM);xnum(w2,q,11,{formula:`IF(C${q}=0,0,(F${q}+H${q})/C${q})`,result:it.pct/100},FP);
+      xnum(w2,q,6,it.prev,FQ);xnum(w2,q,7,it.prevAmt,FM);xnum(w2,q,8,it.cur,FQ,{fill:CURF});xnum(w2,q,9,it.curAmt,FM,{fill:CURF});
+      xnum(w2,q,10,it.cumAmt,FM);xnum(w2,q,11,{formula:`IF(C${q}=0,0,(F${q}+H${q})/C${q})`,result:it.pct/100},FP);
       xnum(w2,q,12,0,FQ);xnum(w2,q,13,0,FQ);xb(w2,q,14,q,14,rowNote(it),{color:'BB0000',fs:9,border:B});q++}}
   const l0=q-1,T=k.T,tb={top:X_MED,bottom:X_BLK,left:X_BLK,right:X_BLK};w2.getRow(q).height=22;
   xb(w2,q,1,q,4,'รวม',{al:'center',b:true,fill:'F3F3F3',border:tb});const sm=(col,res,fill)=>xnum(w2,q,col,{formula:(items.length||exr.length)?`SUM(${colL(col)}${f0}:${colL(col)}${l0})`:'0',result:res},FM,{b:true,fill:fill||'F3F3F3',border:tb});

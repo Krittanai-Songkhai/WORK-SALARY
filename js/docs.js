@@ -64,7 +64,7 @@ function linePages(c,k,o){
 
 /* --- ชุดแบบห้อง (ตารางห้อง × ITEM พร้อมปริมาณ ตร.ม.) --- */
 function itemAgg(k){
-  const m=new Map();for(const r of k.rows.filter(x=>x.roomId)){let a=m.get(r.boqId);if(!a){a={boqId:r.boqId,name:r.name,unit:r.unit,rate:r.rate,qty:0,prev:0,cur:0,cum:0};m.set(r.boqId,a)}a.qty+=r.qty;a.prev+=r.prev;a.cur+=r.cur;a.cum+=r.cum}
+  const m=new Map();for(const r of k.rows.filter(x=>x.roomId)){let a=m.get(r.boqId);if(!a){a={boqId:r.boqId,name:r.name,unit:r.unit,rate:r.crate,base:r.rate,rchg:r.rchg,qty:0,prev:0,cur:0,cum:0,amt:0,prevAmt:0,curAmt:0,cumAmt:0};m.set(r.boqId,a)}a.amt+=r.amt;a.prevAmt+=r.prevAmt;a.curAmt+=r.curAmt;a.cumAmt+=r.cumAmt;a.qty+=r.qty;a.prev+=r.prev;a.cur+=r.cur;a.cum+=r.cum}
   return[...m.values()].sort((a,b)=>natCmp(a.name,b.name));
 }
 const sumT=rows=>{const T={amt:0,prevAmt:0,curAmt:0,cumAmt:0};rows.forEach(r=>{T.amt+=r.amt;T.prevAmt+=r.prevAmt;T.curAmt+=r.curAmt;T.cumAmt+=r.cumAmt});T.pct=T.amt?T.cumAmt/T.amt*100:0;return T};
@@ -89,7 +89,7 @@ function roomPages(c,k){
       const tot=lastP?`<tr class="tot"><td>รวม (${esc(its[0]?its[0].unit:'')})</td>${its.map(it=>`<td class="n">${fq(it.qty)}</td><td class="n cur">${fq(it.cur)}</td>`).join('')}</tr>
         <tr class="tot"><td>เบิกก่อนหน้า</td>${its.map(it=>`<td colspan="2" class="n">${fq(it.prev)}</td>`).join('')}</tr>
         <tr class="tot"><td>% สะสม</td>${its.map(it=>`<td colspan="2" class="n">${pct(it.qty?(it.prev+it.cur)/it.qty*100:0)}</td>`).join('')}</tr>
-        <tr class="tot"><td>มูลค่างวดนี้ (บาท)</td>${its.map(it=>`<td colspan="2" class="n">${f2(it.cur*it.rate)}</td>`).join('')}</tr>`:'';
+        <tr class="tot"><td>มูลค่างวดนี้ (บาท)</td>${its.map(it=>`<td colspan="2" class="n">${f2(it.curAmt)}</td>`).join('')}</tr>`:'';
       parts.push({head:dHead(c,k,ci===0&&pi===0?'ตารางส่งงานรายห้อง (ปริมาณ ตร.ม. ต่อ ITEM)':'ตารางส่งงานรายห้อง (ต่อ)'),html:`<table class="dt dense">${colg}${head}<tbody>${body}${tot}</tbody></table>`});
     });
   });
@@ -102,7 +102,7 @@ function roomPages(c,k){
       parts.push({head:dHead(c,k,i===0?'สรุปราคารายห้อง (บาท)':'สรุปราคารายห้อง (ต่อ)'),html:`<table class="dt"><colgroup><col style="width:200px"><col><col><col><col><col style="width:70px"></colgroup><thead><tr><th>ห้อง / พื้นที่</th><th>มูลค่าสัญญา</th><th>เบิกก่อนหน้า</th><th class="cur">งวดนี้</th><th>สะสม</th><th>% สะสม</th></tr></thead><tbody>${rows.join('')}${last?`<tr class="tot"><td>รวมทุกห้อง</td><td class="n">${f2(sm.amt)}</td><td class="n">${f2(sm.prev)}</td><td class="n cur">${f2(sm.cur)}</td><td class="n">${f2(sm.cum)}</td><td class="n">${pct(sm.amt?sm.cum/sm.amt*100:0)}</td></tr>`:''}</tbody></table>`})})}}
   // หน้าสรุปงบ (แบ่งหน้าเมื่อรายการเยอะ)
   const bc=boqControl(c.building);const bq=id=>bc.find(x=>x.it.id===id);
-  const srow=it=>{const b=bq(it.boqId);const a=it.cum;return`<tr><td>${esc(it.name)}</td><td class="c">${esc(it.unit)}</td><td class="n">${fq(it.qty)}</td><td class="n">${f2(it.rate)}</td><td class="n">${f2(it.qty*it.rate)}</td><td class="n">${fq(it.prev)}</td><td class="n">${f2(it.prev*it.rate)}</td><td class="n cur">${fq(it.cur)}</td><td class="n cur">${f2(it.cur*it.rate)}</td><td class="n">${f2(a*it.rate)}</td><td class="n">${pct(it.qty?a/it.qty*100:0)}</td><td class="n">${b&&b.qty?fq(b.qty):'-'}</td><td class="n">${b&&b.qty?fq(b.qty-b.alloc):'-'}</td><td class="warn">${b&&b.qty?(b.over?'จัดสรรเกิน BOQ':''):'ไม่มี BOQ คลุม'}</td></tr>`};
+  const srow=it=>{const b=bq(it.boqId);const a=it.cum;return`<tr><td>${esc(it.name)}</td><td class="c">${esc(it.unit)}</td><td class="n">${fq(it.qty)}</td><td class="n">${f2(it.rate)}</td><td class="n">${f2(it.amt)}</td><td class="n">${fq(it.prev)}</td><td class="n">${f2(it.prevAmt)}</td><td class="n cur">${fq(it.cur)}</td><td class="n cur">${f2(it.curAmt)}</td><td class="n">${f2(it.cumAmt)}</td><td class="n">${pct(it.qty?a/it.qty*100:0)}</td><td class="n">${b&&b.qty?fq(b.qty):'-'}</td><td class="n">${b&&b.qty?fq(b.qty-b.alloc):'-'}</td><td class="warn">${b&&b.qty?(b.over?'จัดสรรเกิน BOQ':''):'ไม่มี BOQ คลุม'}</td></tr>`};
   const erow=r=>`<tr><td>${esc(r.name)}</td><td class="c">${esc(r.unit)}</td><td class="n">${fq(r.qty)}</td><td class="n">${f2(r.rate)}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${f2(r.prevAmt)}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${f2(r.curAmt)}</td><td class="n">${f2(r.cumAmt)}</td><td class="n">${pct(r.pct)}</td><td class="n">-</td><td class="n">-</td><td class="warn">${esc(rowNote(r))}</td></tr>`;
   const exs=k.rows.filter(r=>r.extra);const sflat=[];items.forEach(it=>sflat.push(srow(it)));
   if(exs.length){sflat.push(`<tr class="fl"><td colspan="14">รายการอื่นๆ นอกตารางห้อง</td></tr>`);let lg=null;exs.forEach(r=>{if(String(r.floor||'').length>7&&r.floor!==lg){sflat.push(`<tr class="fl2"><td colspan="14">${esc(r.floor)}</td></tr>`);lg=r.floor}sflat.push(erow(r))})}
