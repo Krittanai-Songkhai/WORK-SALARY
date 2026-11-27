@@ -92,8 +92,8 @@ const ACT={
   roomsnone(){const c=by('crews',UI.crew);c.roomIds=[];save(c);render()},
   newsub(){const c=by('crews',UI.crew);const s=newSub(c);UI.sub=s.id;render();scrollTo(0,0)},
   opensub(el){UI.sub=el.dataset.id;render();scrollTo(0,0)},
-  async docsub(el){if(!await askDed())return;const s=by('subs',el.dataset.id);const c=by('crews',s.crewId);previewDoc(await crewDocReady(c,s.no),`${c.building}_${c.name}_งวด${s.no}`)},
-  async xlssub(el){if(!await askDed())return;const s=by('subs',el.dataset.id);exportXlsx(by('crews',s.crewId),s.no)},
+  async docsub(el){if(!await askDed())return;const s=by('subs',el.dataset.id);const c=by('crews',s.crewId);previewDoc(await withDed(()=>crewDocReady(c,s.no)),`${c.building}_${c.name}_งวด${s.no}`)},
+  async xlssub(el){if(!await askDed())return;const s=by('subs',el.dataset.id);withDed(()=>exportXlsx(by('crews',s.crewId),s.no))},
   delsub(el){armBtn(el,'กดอีกครั้งเพื่อลบงวด',()=>{const s=curSub();UI.sub=null;UI.crew=s.crewId;del('subs',s.id);render()})},
   subrate(){const s=curSub();if(!s)return;const c=by('crews',s.crewId);const k=calcCrew(c,s.no);
     const m=new Map();k.rows.forEach(r=>{if(!m.has(r.rk))m.set(r.rk,{rk:r.rk,name:r.name,unit:r.unit,base:r.rate,floor:r.roomId?'':r.floor})});
@@ -110,8 +110,8 @@ const ACT={
   fullroom(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);k.rows.filter(r=>r.roomId===el.dataset.id&&(!UI.svis||UI.svis.has(r.key))).forEach(r=>{const rem=r.qty-r.prev;if(rem>1e-9)s.entries[r.key]=+rem.toFixed(4)});save(s);render()},
   pctline(el){const s=curSub();const k=calcCrew(by('crews',s.crewId),s.no);const r=k.rows.find(x=>x.key===el.dataset.key);const p=+el.dataset.p;
     const v=p===100?Math.max(0,r.qty-r.prev):r.qty*p/100;setSubEntry(s,r.key,+v.toFixed(4));render()},
-  async bpdf(){if(!await askDed())return;await ensureData([S.project.logoId],true);const pg=buildingPages(UI.b,UI.kind);previewDoc(pg,'สรุปส่งงาน_'+(UI.b||'ทุกอาคาร'))},
-  async bxls(){if(!await askDed())return;exportBuildingXlsx(UI.b,UI.kind)},
+  async bpdf(){if(!await askDed())return;await ensureData([S.project.logoId],true);const pg=await withDed(()=>buildingPages(UI.b,UI.kind));previewDoc(pg,'สรุปส่งงาน_'+(UI.b||'ทุกอาคาร'))},
+  async bxls(){if(!await askDed())return;withDed(()=>exportBuildingXlsx(UI.b,UI.kind))},
   newboq(){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:UI.bg&&UI.bg!==NOGRP?UI.bg:'',name:'',unit:'',qty:0,rate:0,note:''});render()},
   newboqg(el){const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:el.dataset.g,name:'',unit:'',qty:0,rate:0,note:''});UI.bcol.delete(el.dataset.g||NOGRP);render()},
   newgrp(){const g=(prompt('ชื่อหมวดงานใหม่ (เช่น งานกระเบื้อง, งานสี, งานฝ้า)')||'').trim();if(!g)return;const b=UI.b||S.project.buildings[0];add('boq',{building:b,group:g,name:'',unit:'',qty:0,rate:0,note:''});UI.bg='';render()},
@@ -339,7 +339,7 @@ function askDed(){
      <label class="pickrow" style="cursor:pointer"><input type="radio" name="dd" value="0" ${EXP.ded?'':'checked'}><span><b>ยอดเต็ม</b><span class="small muted" style="display:block">แสดงยอดเบิกผลงานโดยไม่หักอะไร</span></span></label>
      <label class="pickrow" style="cursor:pointer;margin-top:6px"><input type="radio" name="dd" value="1" ${EXP.ded?'checked':''}><span><b>หักภาษี + เงินประกันผลงาน = ${EXP.tax+EXP.ret}%</b><span class="small muted" style="display:block">แสดงยอดเต็ม, รายการหัก และยอดเบิกสุทธิ ท้ายเอกสาร</span></span></label>
      <div class="row" style="gap:10px;margin:10px 0 0;opacity:${EXP.ded?1:.5}"><label class="f" style="flex:1">ภาษี ณ ที่จ่าย (%)<input type="number" step="any" id="dd-t" value="${EXP.tax}" ${EXP.ded?'':'disabled'}></label><label class="f" style="flex:1">เงินประกันผลงาน (%)<input type="number" step="any" id="dd-r" value="${EXP.ret}" ${EXP.ded?'':'disabled'}></label></div>
-     <p class="hint" style="margin:8px 0 0">หักจากยอดเบิกงวดนี้ที่แสดงท้ายเอกสาร (ตัวเลขรายรายการในตารางยังเป็นยอดเต็ม) ระบบจำตัวเลือกล่าสุดไว้ให้</p>
+     <p class="hint" style="margin:8px 0 0">ยอดเงินทุกช่องในเอกสาร (ทุก ITEM ทุกห้อง ทุกชั้น และยอดรวม) จะเป็นยอดสุทธิหลังหัก ส่วนท้ายเอกสารแสดงยอดเต็มและรายการหักไว้ให้ ระบบจำตัวเลือกล่าสุดไว้</p>
      <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn" data-x="no">ยกเลิก</button><button class="btn pri" data-x="go">ตกลง</button></div>`};
     draw();
     o.addEventListener('change',e=>{const t=e.target;if(t.name==='dd'){EXP.ded=t.value==='1';draw()}else if(t.id==='dd-t'){EXP.tax=Math.max(0,num(t.value))}else if(t.id==='dd-r'){EXP.ret=Math.max(0,num(t.value))}});

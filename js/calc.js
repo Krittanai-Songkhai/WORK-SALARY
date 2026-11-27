@@ -28,7 +28,7 @@ function calcCrew(c,no){
     const prev=prevSubs.reduce((a,s)=>a+num((s.entries||{})[r.key]),0);const q=cur?num((cur.entries||{})[r.key]):0;
     const prevAmt=prevSubs.reduce((a,s)=>a+num((s.entries||{})[r.key])*effRate(subs,s.no,rk,r.rate),0);
     const crate=cur?effRate(subs,cur.no,rk,r.rate):r.rate;
-    const cum=prev+q;return{...r,rk,crate,rchg:Math.abs(crate-r.rate)>1e-9,prev,cur:q,cum,amt:r.qty*r.rate,prevAmt,curAmt:q*crate,cumAmt:prevAmt+q*crate,pct:r.qty?cum/r.qty*100:0,over:cum>r.qty+1e-9}});
+    const cum=prev+q;return{...r,rk,crate,rchg:Math.abs(crate-r.rate)>1e-9,prev,cur:q,cum,amt:r.qty*r.rate*FX(),prevAmt:prevAmt*FX(),curAmt:q*crate*FX(),cumAmt:(prevAmt+q*crate)*FX(),pct:r.qty?cum/r.qty*100:0,over:cum>r.qty+1e-9}});
   const sum=k=>rows.reduce((a,r)=>a+r[k],0);
   const T={amt:sum('amt'),prevAmt:sum('prevAmt'),curAmt:sum('curAmt'),cumAmt:sum('cumAmt')};T.pct=T.amt?T.cumAmt/T.amt*100:0;T.prevPct=T.amt?T.prevAmt/T.amt*100:0;T.curPct=T.amt?T.curAmt/T.amt*100:0;
   return{crew:c,sub:cur||null,no:n,rows,T,subs,missing:rows.filter(needsBoqWarn).length};
@@ -110,4 +110,7 @@ function sampleTile(){
 
 /* ตัวเลือกส่งออกเอกสาร: ยอดเต็ม หรือ หักภาษี + ประกันผลงาน */
 const EXP={ded:false,tax:3,ret:5};
-const dedOf=a=>{const tax=Math.round(a*EXP.tax)/100,ret=Math.round(a*EXP.ret)/100;return{tax,ret,net:a-tax-ret}};
+const FX=()=>EXP.on?1-(EXP.tax+EXP.ret)/100:1;
+/* amt = ยอดสุทธิ (ถ้า EXP.on แล้ว) -> คืนยอดเต็ม ภาษี ประกัน สุทธิ */
+const dedOf=a=>{const f=FX(),full=f?a/f:a;const tax=Math.round(full*EXP.tax)/100,ret=Math.round(full*EXP.ret)/100;return{full,tax,ret,net:EXP.on?a:full-tax-ret}};
+async function withDed(fn){EXP.on=!!EXP.ded;try{return await fn()}finally{EXP.on=false}}

@@ -34,7 +34,7 @@ function dHead(c,k,title){
   return`<table class="dh"><colgroup><col style="width:92px"><col style="width:28%"><col><col style="width:13%"><col style="width:19%"></colgroup>
    <tr><td rowspan="2" class="lg">${logoHTML()}</td><td class="c">โครงการ : ${esc(P.name)}</td><td class="ttl" rowspan="2">${esc(c.name)}</td><td class="c">หมวดงาน :</td><td class="ttl" style="color:#111;font-size:14px;text-align:left">${esc(P.category||'')}</td></tr>
    <tr><td class="c">ผู้ว่าจ้าง : ${esc(P.client||'')}</td><td class="c">Date : ${esc(fmtShort(s&&s.date||todayISO()))}</td><td>${esc(fmtDate(s&&s.date||todayISO()))}</td></tr></table>
-   <div class="band">${esc(title)}</div>
+   <div class="band">${esc(title)}${EXP.on?` <span style="font-size:.7em;font-weight:500">· ยอดเงินทุกช่องเป็นยอดสุทธิหลังหักภาษี ${EXP.tax}% + ประกันผลงาน ${EXP.ret}%</span>`:''}</div>
    <div class="band2"><span>${KINDTXT[c.kind]||'ชุด'} : <b>${esc(c.name)}</b></span><span>อาคาร : <b>${esc(c.building)}</b></span><span>งวดที่ : <b>${k.no}</b>${rng?' ('+esc(rng)+')':''}</span>${c.detail?`<span>รายละเอียดงาน : ${esc(c.detail)}</span>`:''}</div>`;
 }
 const dFoot=(c,k)=>`<div class="dpf"><span>${esc(S.project.name)} · ${esc(c.building)} · ${esc(c.name)} · งวดที่ ${k.no}</span><span>%%P%% / %%N%%</span></div>`;
@@ -241,8 +241,8 @@ function roomTablePages(b){
 
 /* กล่องรวมเงิน: ยอดเต็ม หรือ หัก ภาษี/ประกันผลงาน แล้วเหลือยอดสุทธิ */
 function sumBox(label,amt){
-  if(!EXP.ded)return`<div class="sum"><span>${label}</span><span>${f2(amt)} บาท</span></div>`;
-  const x=dedOf(amt);
+  if(!EXP.on)return`<div class="sum"><span>${label}</span><span>${f2(amt)} บาท</span></div>`;
+  const x=dedOf(amt);amt=x.full;
   return`<div class="sum" style="display:block;font-size:14px"><div style="display:flex;justify-content:space-between"><span>${label} (ยอดเต็ม)</span><span>${f2(amt)} บาท</span></div>
    <div style="display:flex;justify-content:space-between;font-weight:500;color:#9a1b1b"><span>หัก ภาษี ณ ที่จ่าย ${EXP.tax}%</span><span>− ${f2(x.tax)} บาท</span></div>
    <div style="display:flex;justify-content:space-between;font-weight:500;color:#9a1b1b"><span>หัก เงินประกันผลงาน ${EXP.ret}%</span><span>− ${f2(x.ret)} บาท</span></div>
