@@ -54,7 +54,13 @@ function xSumBox(ws,r,n,label,cellRef){
   ws.getRow(r).height=26;
   xb(ws,r,1,r,n-3,label,{b:true,fs:13,border:{top:{style:'medium',color:{argb:'FF'+BLUE}},bottom:{style:'medium',color:{argb:'FF'+BLUE}},left:{style:'medium',color:{argb:'FF'+BLUE}}},indent:1});
   xb(ws,r,n-2,r,n,cellRef,{b:true,fs:14,al:'right',fmt:'#,##0.00" บาท"',border:{top:{style:'medium',color:{argb:'FF'+BLUE}},bottom:{style:'medium',color:{argb:'FF'+BLUE}},right:{style:'medium',color:{argb:'FF'+BLUE}}}});
-  return r+1;
+  if(!EXP.ded)return r+1;
+  const amt=cellRef&&cellRef.result!==undefined?cellRef.result:0,d=dedOf(amt),col=colL(n-2),B={top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
+  const line=(rr,lab,val,fm,bold)=>{xb(ws,rr,1,rr,n-3,lab,{b:bold,fs:12,indent:1,border:B});xb(ws,rr,n-2,rr,n,val,{b:bold,fs:bold?13:12,al:'right',fmt:'#,##0.00" บาท"',border:B})};
+  line(r+1,`หัก ภาษี ณ ที่จ่าย ${EXP.tax}%`,{formula:`-ROUND(${col}${r}*${EXP.tax}/100,2)`,result:-d.tax});
+  line(r+2,`หัก เงินประกันผลงาน ${EXP.ret}%`,{formula:`-ROUND(${col}${r}*${EXP.ret}/100,2)`,result:-d.ret});
+  line(r+3,`ยอดเบิกสุทธิ (หัก ${EXP.tax+EXP.ret}%)`,{formula:`${col}${r}+${col}${r+1}+${col}${r+2}`,result:d.net},0,true);
+  return r+5;
 }
 const xRange=k=>{const s=k.sub;return s?[s.from&&fmtShort(s.from),s.to&&fmtShort(s.to)].filter(Boolean).join(' – '):''};
 const xBand2=(c,k)=>`${KINDTXT[c.kind]||'ชุด'} : ${c.name}      อาคาร : ${c.building}      งวดที่ : ${k.no}${xRange(k)?' ('+xRange(k)+')':''}${c.detail?'      รายละเอียดงาน : '+c.detail:''}`;

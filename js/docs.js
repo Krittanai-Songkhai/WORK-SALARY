@@ -55,7 +55,7 @@ function linePages(c,k,o){
     <tr><th>ปริมาณ</th><th>หน่วย</th><th>ค่าแรง/หน่วย</th><th>บาท</th><th>ปริมาณ</th><th>บาท</th><th class="cur">ปริมาณ</th><th class="cur">บาท</th><th>ยอดเบิกสะสม (บาท)</th><th>% สะสม</th></tr></thead>`;
   const tr=x=>{if(x.band){lastFl=null;return`<tr class="fl"><td colspan="13">${esc(x.band)}</td></tr>`}const r=x.r;const f=isGrp(r.floor)?'':(r.floor!==lastFl?r.floor:'');lastFl=isGrp(r.floor)?null:r.floor;return`<tr><td class="c">${esc(f)}</td><td>${esc(r.name)}</td><td class="n">${fq(r.qty)}</td><td class="c">${esc(r.unit)}</td><td class="n">${f2(r.rate)}${r.rchg?`<br><span style="font-size:9px;color:#b45309">งวดนี้ ${f2(r.crate)}</span>`:''}</td><td class="n">${f2(r.amt)}</td><td class="n">${r.prev?fq(r.prev):'-'}</td><td class="n">${r.prevAmt?f2(r.prevAmt):'-'}</td><td class="n cur">${r.cur?fq(r.cur):'-'}</td><td class="n cur">${r.curAmt?f2(r.curAmt):'-'}</td><td class="n">${r.cumAmt?f2(r.cumAmt):'-'}</td><td class="n">${pct(r.pct)}</td><td class="warn">${esc(rowNote(r))}</td></tr>`};
   const totRow=`<tr class="tot"><td colspan="2" class="c">รวม</td><td></td><td></td><td></td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="n cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td></td></tr>`;
-  const fin=`<div class="sum"><span>${o.sumLabel||'รวมเป็นเงินเบิกผลงาน'} งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${k.missing?`<div style="font-size:10.5px;color:#b00;margin-top:4px">* มี ${k.missing} รายการที่ไม่มี BOQ คลุม (ระบุไว้ในช่องหมายเหตุ)</div>`:''}${o.nosig?'':sigHTML()}`;
+  const fin=`${o.nosig?`<div class="sum"><span>${o.sumLabel||'รวมเป็นเงินเบิกผลงาน'} งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>`:sumBox(`${o.sumLabel||'รวมเป็นเงินเบิกผลงาน'} งวดที่ ${k.no}`,k.T.curAmt)}${k.missing?`<div style="font-size:10.5px;color:#b00;margin-top:4px">* มี ${k.missing} รายการที่ไม่มี BOQ คลุม (ระบุไว้ในช่องหมายเหตุ)</div>`:''}${o.nosig?'':sigHTML()}`;
   chunks.forEach((ch,i)=>{const lastP=i===chunks.length-1&&!extra;
     pages.push(`<div class="dp">${dHead(c,k,i===0?(o.title||`ตารางแบ่งจ่าย ส่งเบิกผลงาน${KINDTXT[c.kind]||''}`):(o.title||'ตารางแบ่งจ่าย ส่งเบิกผลงาน')+' (ต่อ)')}<table class="dt">${col}${head}<tbody>${ch.map(tr).join('')}${lastP?totRow:''}</tbody></table>${lastP?fin:''}${dFoot(c,k,i+1,N)}</div>`)});
   if(extra)pages.push(`<div class="dp">${dHead(c,k,o.title||'สรุปรวมเบิกผลงาน')}<table class="dt">${col}${head}<tbody>${totRow}</tbody></table>${fin}${dFoot(c,k,N,N)}</div>`);
@@ -113,7 +113,7 @@ function roomPages(c,k){
     <tr><th>ปริมาณ</th><th>ค่าแรง/หน่วย</th><th>บาท</th><th>ปริมาณ</th><th>บาท</th><th class="cur">ปริมาณ</th><th class="cur">บาท</th><th>บาท</th><th>%</th><th>BOQ</th><th>คงเหลือ</th></tr></thead>`;
   const stot=`<tr class="tot"><td colspan="4" class="c">รวม</td><td class="n">${f2(k.T.amt)}</td><td></td><td class="n">${f2(k.T.prevAmt)}</td><td class="cur"></td><td class="n cur">${f2(k.T.curAmt)}</td><td class="n">${f2(k.T.cumAmt)}</td><td class="n">${pct(k.T.pct)}</td><td colspan="3"></td></tr>`;
   schunks.forEach((ch,i)=>{const last=i===schunks.length-1;
-    parts.push({head:dHead(c,k,'สรุปงบเบิกผลงาน (คุมงบตามปริมาณ ตร.ม. ต่อ ITEM)'+(i?' (ต่อ)':'')),html:`<table class="dt">${scol}${shead}<tbody>${ch.join('')}${last?stot:''}</tbody></table>${last?`<div class="sum"><span>รวมเป็นเงินเบิกผลงาน งวดที่ ${k.no}</span><span>${f2(k.T.curAmt)} บาท</span></div>${sigHTML()}`:''}`})});
+    parts.push({head:dHead(c,k,'สรุปงบเบิกผลงาน (คุมงบตามปริมาณ ตร.ม. ต่อ ITEM)'+(i?' (ต่อ)':'')),html:`<table class="dt">${scol}${shead}<tbody>${ch.join('')}${last?stot:''}</tbody></table>${last?`${sumBox(`รวมเป็นเงินเบิกผลงาน งวดที่ ${k.no}`,k.T.curAmt)}${sigHTML()}`:''}`})});
   const out=parts.map(p=>`<div class="dp">${p.head}${p.html}${dFoot(c,k)}</div>`);
   const ek=extraK(k);if(ek)out.splice(out.length-1,0,...linePages(c,ek,{title:'รายการอื่นๆ นอกตารางห้อง',sumLabel:'รวมรายการอื่นๆ',nosig:true}));
   return out;
@@ -148,7 +148,7 @@ function buildingPages(b,kind){
      <thead><tr><th>ที่</th><th>อาคาร</th><th>ชุด</th><th>ประเภท</th><th>รายละเอียดงาน</th><th>มูลค่าสัญญา</th><th>เบิกก่อนหน้า</th><th class="cur">งวดล่าสุด</th><th>รวมเบิกสะสม</th><th>%</th><th>หมายเหตุ</th></tr></thead><tbody>
      ${ch.map((x,j)=>{const c=x.c,t=x.k.T;return`<tr><td class="c">${n0+j+1}</td><td class="c">${esc(c.building)}</td><td>${esc(c.name)}</td><td class="c">${esc(KIND[c.kind]||'')}</td><td style="font-size:10px">${esc(c.detail||'')}</td><td class="n">${c.skip?'-':f2(t.amt)}</td><td class="n">${c.skip?'-':f2(t.prevAmt)}</td><td class="n cur">${c.skip?'-':f2(t.curAmt)}${x.k.sub?` <span style="font-size:9px;color:#555">(ง.${x.k.no})</span>`:''}</td><td class="n">${c.skip?'-':f2(t.cumAmt)}</td><td class="n">${c.skip?'-':pct(t.pct)}</td><td class="warn">${esc([c.skip?'ไม่ส่งงานงวดนี้':'',c.note,x.k.missing?`ไม่มี BOQ ${x.k.missing} รายการ`:'',!x.k.rows.length&&!c.skip?'ยังไม่มีรายการ':''].filter(Boolean).join(' · '))}</td></tr>`}).join('')}
      ${last?`<tr class="tot"><td colspan="5" class="c">รวมทั้งหมด</td><td class="n">${f2(tot.amt)}</td><td class="n">${f2(tot.prev)}</td><td class="n cur">${f2(tot.cur)}</td><td class="n">${f2(tot.cum)}</td><td class="n">${pct(tot.amt?tot.cum/tot.amt*100:0)}</td><td></td></tr>`:''}</tbody></table>
-     ${last?`<div class="sum"><span>รวมเป็นเงินเบิกผลงานงวดล่าสุด</span><span>${f2(tot.cur)} บาท</span></div>${sigHTML()}`:''}
+     ${last?`${sumBox('รวมเป็นเงินเบิกผลงานงวดล่าสุด',tot.cur)}${sigHTML()}`:''}
      <div class="dpf"><span>${esc(P.name)}</span><span>${i+1} / ${chunks.length}</span></div></div>`)});
   return pages;
 }
@@ -236,4 +236,15 @@ function roomTablePages(b){
     pg.forEach((rows,pi)=>out.push(`<div class="dp">${head(ci===0&&pi===0?'ปริมาณงานต่อห้อง':'ปริมาณงานต่อห้อง (ต่อ)')}<table class="dt dense">${colg}${th}<tbody>${rows.join('')}${pi===pg.length-1?tot:''}</tbody></table>${foot}</div>`));
   });
   const N=out.length;return out.map((h,i)=>h.replace(/%%P%%/g,i+1).replace(/%%N%%/g,N));
+}
+
+
+/* กล่องรวมเงิน: ยอดเต็ม หรือ หัก ภาษี/ประกันผลงาน แล้วเหลือยอดสุทธิ */
+function sumBox(label,amt){
+  if(!EXP.ded)return`<div class="sum"><span>${label}</span><span>${f2(amt)} บาท</span></div>`;
+  const x=dedOf(amt);
+  return`<div class="sum" style="display:block;font-size:14px"><div style="display:flex;justify-content:space-between"><span>${label} (ยอดเต็ม)</span><span>${f2(amt)} บาท</span></div>
+   <div style="display:flex;justify-content:space-between;font-weight:500;color:#9a1b1b"><span>หัก ภาษี ณ ที่จ่าย ${EXP.tax}%</span><span>− ${f2(x.tax)} บาท</span></div>
+   <div style="display:flex;justify-content:space-between;font-weight:500;color:#9a1b1b"><span>หัก เงินประกันผลงาน ${EXP.ret}%</span><span>− ${f2(x.ret)} บาท</span></div>
+   <div style="display:flex;justify-content:space-between;border-top:2px solid #1a3fc4;margin-top:4px;padding-top:4px;font-size:17px"><span>ยอดเบิกสุทธิ (หัก ${EXP.tax+EXP.ret}%)</span><span>${f2(x.net)} บาท</span></div></div>`;
 }

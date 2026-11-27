@@ -106,3 +106,8 @@ function sampleTile(){
   const c=S.crews.find(x=>x.building===b&&x.mode==='room');if(c){c.rates={[f.id]:95,[w.id]:110,[s.id]:40};c.roomIds=S.rooms.map(r=>r.id);save(c)}
   return c;
 }
+
+
+/* ตัวเลือกส่งออกเอกสาร: ยอดเต็ม หรือ หักภาษี + ประกันผลงาน */
+const EXP={ded:false,tax:3,ret:5};
+const dedOf=a=>{const tax=Math.round(a*EXP.tax)/100,ret=Math.round(a*EXP.ret)/100;return{tax,ret,net:a-tax-ret}};
