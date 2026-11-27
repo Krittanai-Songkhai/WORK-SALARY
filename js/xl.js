@@ -102,25 +102,25 @@ async function xRoomSheets(wb,c,k){
   const ws=wb.addWorksheet('ตารางห้อง งวด '+k.no);const n=17;ws.getColumn(1).width=26;for(let i=2;i<=n;i++)ws.getColumn(i).width=11;
   let r=await xHead(wb,ws,[1,5,7,4],{title:c.name,date:(k.sub&&k.sub.date)||todayISO(),band:'ตารางส่งงานรายห้อง (ปริมาณ ตร.ม. ต่อ ITEM)',band2:xBand2(c,k)});
   const hb=X_BOX(X_BLK);const H=(r1,c1,r2,c2,t,f)=>xb(ws,r1,c1,r2,c2,t,{al:'center',b:true,fs:10,fill:f||'EEEEEE',border:hb});
-  const chunks=[];for(let i=0;i<items.length;i+=4)chunks.push(items.slice(i,i+4));
+  const chunks=[];for(let i=0;i<items.length;i+=3)chunks.push(items.slice(i,i+3));
   for(const its of chunks){
     const rooms=roomsOf(c).filter(rm=>its.some(it=>rowOf.has(rm.id+'~'+it.boqId)));
     ws.getRow(r).height=32;H(r,1,r+1,1,'ห้อง / พื้นที่');
-    its.forEach((it,j)=>{const c0=2+j*4;H(r,c0,r,c0+3,`${it.name}\nค่าแรง ${f2(it.rate)} บาท/${it.unit}`);H(r+1,c0,r+1,c0,'ปริมาณ');H(r+1,c0+1,r+1,c0+1,'สะสมก่อน');H(r+1,c0+2,r+1,c0+2,'งวดนี้',CURH);H(r+1,c0+3,r+1,c0+3,'% สะสม')});
+    its.forEach((it,j)=>{const c0=2+j*5;H(r,c0,r,c0+4,`${it.name}\nค่าแรง ${f2(it.rate)} บาท/${it.unit}`);H(r+1,c0,r+1,c0,'ปริมาณ');H(r+1,c0+1,r+1,c0+1,'สะสมก่อน');H(r+1,c0+2,r+1,c0+2,'งวดนี้',CURH);H(r+1,c0+3,r+1,c0+3,'% สะสม');H(r+1,c0+4,r+1,c0+4,'บาท งวดนี้',CURH)});
     r+=2;const first=r;let fl=null;const frows=[];
     for(const rm of rooms){
-      if(rm.floor!==fl){fl=rm.floor;ws.getRow(r).height=20;xb(ws,r,1,r,1+its.length*4,'ชั้น '+(fl||'-'),{b:true,fill:'F2EFE6',border:X_BOX(X_THIN)});r++}
+      if(rm.floor!==fl){fl=rm.floor;ws.getRow(r).height=20;xb(ws,r,1,r,1+its.length*5,'ชั้น '+(fl||'-'),{b:true,fill:'F2EFE6',border:X_BOX(X_THIN)});r++}
       ws.getRow(r).height=22;xb(ws,r,1,r,1,rm.name,{border:X_BOX(X_THIN)});frows.push(r);
-      its.forEach((it,j)=>{const c0=2+j*4;const x=rowOf.get(rm.id+'~'+it.boqId);
-        if(x){xnum(ws,r,c0,x.qty,FQ);xnum(ws,r,c0+1,x.prev,FQ);xnum(ws,r,c0+2,x.cur,FQ,{fill:CURF});xnum(ws,r,c0+3,{formula:`IF(${colL(c0)}${r}=0,0,(${colL(c0+1)}${r}+${colL(c0+2)}${r})/${colL(c0)}${r})`,result:x.pct/100},FP)}
-        else{for(let q=0;q<4;q++)xb(ws,r,c0+q,r,c0+q,q?'':'·',{al:'center',color:'999999',fill:q===2?CURF:undefined,border:X_BOX(X_THIN)})}});
+      its.forEach((it,j)=>{const c0=2+j*5;const x=rowOf.get(rm.id+'~'+it.boqId);
+        if(x){xnum(ws,r,c0,x.qty,FQ);xnum(ws,r,c0+1,x.prev,FQ);xnum(ws,r,c0+2,x.cur,FQ,{fill:CURF});xnum(ws,r,c0+3,{formula:`IF(${colL(c0)}${r}=0,0,(${colL(c0+1)}${r}+${colL(c0+2)}${r})/${colL(c0)}${r})`,result:x.pct/100},FP);xnum(ws,r,c0+4,x.curAmt,FM,{fill:CURF})}
+        else{for(let q=0;q<5;q++)xb(ws,r,c0+q,r,c0+q,q?'':'·',{al:'center',color:'999999',fill:q===2?CURF:undefined,border:X_BOX(X_THIN)})}});
       r++}
     const tb={top:X_MED,bottom:X_BLK,left:X_BLK,right:X_BLK};ws.getRow(r).height=22;xb(ws,r,1,r,1,`รวม (${its[0]?its[0].unit:''})`,{b:true,fill:'F3F3F3',border:tb});
-    its.forEach((it,j)=>{const c0=2+j*4;const rng=cc=>frows.length?`SUM(${colL(cc)}${first}:${colL(cc)}${r-1})`:'0';
+    its.forEach((it,j)=>{const c0=2+j*5;const rng=cc=>frows.length?`SUM(${colL(cc)}${first}:${colL(cc)}${r-1})`:'0';
       xnum(ws,r,c0,{formula:rng(c0),result:it.qty},FQ,{b:true,fill:'F3F3F3',border:tb});xnum(ws,r,c0+1,{formula:rng(c0+1),result:it.prev},FQ,{b:true,fill:'F3F3F3',border:tb});xnum(ws,r,c0+2,{formula:rng(c0+2),result:it.cur},FQ,{b:true,fill:CURF,border:tb});
-      xnum(ws,r,c0+3,{formula:`IF(${colL(c0)}${r}=0,0,(${colL(c0+1)}${r}+${colL(c0+2)}${r})/${colL(c0)}${r})`,result:it.qty?(it.prev+it.cur)/it.qty:0},FP,{b:true,fill:'F3F3F3',border:tb})});
+      xnum(ws,r,c0+3,{formula:`IF(${colL(c0)}${r}=0,0,(${colL(c0+1)}${r}+${colL(c0+2)}${r})/${colL(c0)}${r})`,result:it.qty?(it.prev+it.cur)/it.qty:0},FP,{b:true,fill:'F3F3F3',border:tb});xnum(ws,r,c0+4,{formula:rng(c0+4),result:it.curAmt},FM,{b:true,fill:CURF,border:tb})});
     const t1=r;r++;ws.getRow(r).height=22;xb(ws,r,1,r,1,'มูลค่างวดนี้ (บาท)',{b:true,fill:'F3F3F3',border:X_BOX(X_BLK)});
-    its.forEach((it,j)=>{const c0=2+j*4;xb(ws,r,c0,r,c0+3,it.curAmt,{al:'right',b:true,fill:'F3F3F3',fmt:FM,border:X_BOX(X_BLK)})});
+    its.forEach((it,j)=>{const c0=2+j*5;xb(ws,r,c0,r,c0+4,it.curAmt,{al:'right',b:true,fill:'F3F3F3',fmt:FM,border:X_BOX(X_BLK)})});
     r+=2;
   }
   xPage(ws,n);

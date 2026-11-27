@@ -79,17 +79,20 @@ function roomPages(c,k){
     const flat=[];let fl=null;for(const r of rooms){if(r.floor!==fl){fl=r.floor;flat.push({band:'ชั้น '+(fl||'-')})}flat.push({room:r})}
     const pgs=[];for(let i=0;i<flat.length;i+=RP)pgs.push(flat.slice(i,i+RP));if(!pgs.length)pgs.push([]);
     for(let i=0;i<pgs.length-1;i++){const l=pgs[i];if(l.length&&l[l.length-1].band)pgs[i+1].unshift(l.pop())}   // หัวชั้นไม่ค้างท้ายหน้า
-    if(pgs[pgs.length-1].length>16)pgs.push([]);                                                         // เผื่อที่แถวรวมท้ายหน้าสุดท้าย
+    if(pgs[pgs.length-1].length>12)pgs.push([]);                                                         // เผื่อที่แถวรวมท้ายหน้าสุดท้าย
     pgs.forEach((rows,pi)=>{
       const lastP=pi===pgs.length-1;
       const colg=`<colgroup><col style="width:${its.length>6?112:150}px">${its.map(()=>'<col><col>').join('')}</colgroup>`;
       const head=`<thead><tr><th rowspan="2">ห้อง / พื้นที่</th>${its.map(it=>`<th colspan="2" class="ith">${esc(it.name)}<br><span style="font-weight:400">${f2(it.rate)} บาท/${esc(it.unit)}</span></th>`).join('')}</tr><tr>${its.map(()=>'<th>ปริมาณ</th><th class="cur">งวดนี้</th>').join('')}</tr></thead>`;
       const body=rows.map(x=>{if(x.band)return`<tr class="fl"><td colspan="${1+its.length*2}">${esc(x.band)}</td></tr>`;
-        return`<tr><td>${esc(x.room.name)}</td>${its.map(it=>{const r=rowOf.get(x.room.id+'~'+it.boqId);return r?`<td class="n">${fq(r.qty)}${r.prev?`<span class="pv">ก่อน ${fq(r.prev)}</span>`:''}</td><td class="n cur">${r.cur?fq(r.cur):''}</td>`:'<td class="c">·</td><td class="cur"></td>'}).join('')}</tr>`}).join('');
+        return`<tr><td>${esc(x.room.name)}</td>${its.map(it=>{const r=rowOf.get(x.room.id+'~'+it.boqId);return r?`<td class="n">${fq(r.qty)}${r.prev?`<span class="pv">ก่อน ${fq(r.prev)}</span>`:''}</td><td class="n cur">${r.cur?fq(r.cur)+`<span class="pv" style="color:#1a3fc4;font-weight:600">฿${f2(r.curAmt)}</span>`:''}</td>`:'<td class="c">·</td><td class="cur"></td>'}).join('')}</tr>`}).join('');
       const tot=lastP?`<tr class="tot"><td>รวม (${esc(its[0]?its[0].unit:'')})</td>${its.map(it=>`<td class="n">${fq(it.qty)}</td><td class="n cur">${fq(it.cur)}</td>`).join('')}</tr>
         <tr class="tot"><td>เบิกก่อนหน้า</td>${its.map(it=>`<td colspan="2" class="n">${fq(it.prev)}</td>`).join('')}</tr>
+        <tr class="tot"><td>มูลค่าสัญญา (บาท)</td>${its.map(it=>`<td colspan="2" class="n">${f2(it.amt)}</td>`).join('')}</tr>
+        <tr class="tot"><td>เบิกก่อนหน้า (บาท)</td>${its.map(it=>`<td colspan="2" class="n">${f2(it.prevAmt)}</td>`).join('')}</tr>
         <tr class="tot"><td>% สะสม</td>${its.map(it=>`<td colspan="2" class="n">${pct(it.qty?(it.prev+it.cur)/it.qty*100:0)}</td>`).join('')}</tr>
-        <tr class="tot"><td>มูลค่างวดนี้ (บาท)</td>${its.map(it=>`<td colspan="2" class="n">${f2(it.curAmt)}</td>`).join('')}</tr>`:'';
+        <tr class="tot cur"><td>มูลค่างวดนี้ (บาท)</td>${its.map(it=>`<td colspan="2" class="n">${f2(it.curAmt)}</td>`).join('')}</tr>
+        <tr class="tot"><td>สะสม (บาท)</td>${its.map(it=>`<td colspan="2" class="n">${f2(it.cumAmt)}</td>`).join('')}</tr>`:'';
       parts.push({head:dHead(c,k,ci===0&&pi===0?'ตารางส่งงานรายห้อง (ปริมาณ ตร.ม. ต่อ ITEM)':'ตารางส่งงานรายห้อง (ต่อ)'),html:`<table class="dt dense">${colg}${head}<tbody>${body}${tot}</tbody></table>`});
     });
   });
